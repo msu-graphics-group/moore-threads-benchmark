@@ -1,0 +1,254 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_buffer_reference : require
+
+#include "common_generated.h"
+
+struct YellowNoise
+{
+  uint m_tag;
+  uint m_dummy;
+};
+
+struct Mandelbrot2D
+{
+  uint m_tag;
+  uint m_dummy;
+};
+
+struct Ocean2D
+{
+  uint m_tag;
+  uint m_dummy;
+};
+
+struct Voronoi2D
+{
+  uint m_tag;
+  uint m_dummy;
+};
+
+struct Perlin2D
+{
+  uint m_tag;
+  uint m_dummy;
+};
+
+struct Julia2D
+{
+  uint m_tag;
+  uint m_dummy;
+};
+
+struct Pseudeo3DMandelbrot
+{
+  uint m_tag;
+  uint m_dummy;
+};
+
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer YellowNoiseBuffer
+{
+	YellowNoise allProcTextures[];
+};
+
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer Mandelbrot2DBuffer
+{
+	Mandelbrot2D allProcTextures[];
+};
+
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer Ocean2DBuffer
+{
+	Ocean2D allProcTextures[];
+};
+
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer Voronoi2DBuffer
+{
+	Voronoi2D allProcTextures[];
+};
+
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer Perlin2DBuffer
+{
+	Perlin2D allProcTextures[];
+};
+
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer Julia2DBuffer
+{
+	Julia2D allProcTextures[];
+};
+
+layout(buffer_reference, std430, buffer_reference_align = 16) buffer Pseudeo3DMandelbrotBuffer
+{
+	Pseudeo3DMandelbrot allProcTextures[];
+};
+
+struct AllBufferReferences
+{
+  YellowNoiseBuffer YellowNoise_buffer;
+  Mandelbrot2DBuffer Mandelbrot2D_buffer;
+  Ocean2DBuffer Ocean2D_buffer;
+  Voronoi2DBuffer Voronoi2D_buffer;
+  Perlin2DBuffer Perlin2D_buffer;
+  Julia2DBuffer Julia2D_buffer;
+  Pseudeo3DMandelbrotBuffer Pseudeo3DMandelbrot_buffer;
+  uint dummy[2];
+};
+layout(binding = 0, set = 0) buffer data0 { uint outData[]; }; // 
+layout(binding = 1, set = 0) buffer data1 { uvec2 allProcTextures[]; }; // 
+layout(binding = 2, set = 0) buffer data2 { AllBufferReferences all_references; }; // 
+layout(binding = 3, set = 0) buffer dataUBO { ProcRender2D_Generated_UBO_Data ubo; };
+
+
+// Virtual Functions of IProcTexture2D:
+const uint TAG_EMPTY = 0;
+const uint TAG_YELLOW_NOISE = 1;
+const uint TAG_MANDELBROT = 2;
+const uint TAG_OCEAN = 3;
+const uint TAG_VORONOI = 4;
+const uint TAG_PERLIN = 5;
+const uint TAG_JULIA = 6;
+const uint TAG_MANDELB_PS3D = 7;
+
+
+vec3 Empty2D_Evaluate_allProcTextures(uint selfId, vec2 tc) { return vec3(0,0,0); }
+vec3 YellowNoise_Evaluate_allProcTextures(uint selfId, vec2 tc) {
+    vec4 uv = 8.0f*vec4(tc.x,tc.y,0.0f,1.0f);
+
+    mat4 m = mat4(1.6,1.2,0.0f,0.0f,-1.2,1.6,0.0f,0.0f,0.0f,0.0f,1.0f,0.0f,0.0f,0.0f,0.0f,1.0f);
+    float f = 0.0;                       
+		f  = 0.5000f*noise( vec2(uv.x,uv.y) ); uv = m*uv;
+		f += 0.2500f*noise( vec2(uv.x,uv.y) ); uv = m*uv;
+		f += 0.1250f*noise( vec2(uv.x,uv.y) ); uv = m*uv;
+		f += 0.0625f*noise( vec2(uv.x,uv.y) ); uv = m*uv; 
+    f = 0.5f + 0.5*f;
+    f *= smoothstep(0.0f, 0.005f, abs(tc.x-0.6f) );	
+
+    return vec3(f,f*f,0.0f); 
+  }
+
+vec3 Mandelbrot2D_Evaluate_allProcTextures(uint selfId, vec2 tc) { 
+    // Antialiasing
+    //
+    vec3 fragColor = vec3(0.0f);
+	  const float fraction  = 1.0f / float(AA*1024);
+	  const float fraction2 = fraction / float(AA*1024);
+	  for (int i = 0; i < AA; i++) {
+	  	for (int j = 0; j < AA; j++) {
+	  		vec2 shift = vec2(float(i) * fraction + float(AA - j - 1) * fraction2,float(j) * fraction + float(i) * fraction2);
+	  		fragColor += clamp(mandelbrot2DFunc(tc + shift), 0.0f, 1.0f);
+	  	}
+	  }
+
+    return fragColor / float(AA * AA);
+  }
+
+vec3 Ocean2D_Evaluate_allProcTextures(uint selfId, vec2 tc) { return water((tc - vec2(0.5f,0.5f))*16.0f, vec3(0.01f,1.0f,0.01f)); }
+
+vec3 Voronoi2D_Evaluate_allProcTextures(uint selfId, vec2 tc) { 
+    const float f = ov(tc*16.0f, 1.0f);
+    return clamp(2*vec3(f*f,f*f*f,f), 0.0f, 1.0f);
+  }
+
+vec3 Perlin2D_Evaluate_allProcTextures(uint selfId, vec2 tc) { 
+    float n1 = octave(1.0f * vec3(tc.x,tc.y,tc.x + tc.y), 4, 0.7f);
+    float n2 = octave(1.0f * vec3(tc.y,tc.x,(tc.x + tc.y) / max(abs(tc.x - tc.y), 0.1f)), 6, 2.5f);
+    float n3 = octave(2.0f * vec3(tc.x+tc.y,tc.y-tc.x,tc.x*tc.y), 6, 1.5f);
+    return clamp(vec3(n1,n2,n3)*5.0f, 0.0f, 1.0f);
+  }
+
+vec3 Julia2D_Evaluate_allProcTextures(uint selfId, vec2 tc) { 
+    // Antialiasing
+    //
+    vec3 fragColor = vec3(0.0f);
+	  const float fraction  = 1.0f / float(AA*1024);
+	  const float fraction2 = fraction / float(AA*1024);
+	  for (int i = 0; i < AA; i++) {
+	  	for (int j = 0; j < AA; j++) {
+	  		vec2 shift = vec2(float(i) * fraction + float(AA - j - 1) * fraction2,float(j) * fraction + float(i) * fraction2);
+	  		fragColor += clamp(JuliaFunc(tc + shift), 0.0f, 1.0f);
+	  	}
+	  }
+
+    return fragColor / float(AA * AA);
+  }
+
+vec3 Pseudeo3DMandelbrot_Evaluate_allProcTextures(uint selfId, vec2 tc) { 
+    // Antialiasing
+    //
+    vec3 fragColor = vec3(0.0f);
+	  const float fraction  = 1.0f / float(AA*1024);
+	  const float fraction2 = fraction / float(AA*1024);
+	  for (int i = 0; i < AA; i++) {
+	  	for (int j = 0; j < AA; j++) {
+	  		vec2 shift = vec2(float(i) * fraction + float(AA - j - 1) * fraction2,float(j) * fraction + float(i) * fraction2);
+	  		fragColor += clamp(render_ps3dmandelbrot(tc + shift), 0.0f, 1.0f);
+	  	}
+	  }
+
+    return fragColor / float(AA * AA);
+  }
+
+vec3 IProcTexture2D_Evaluate_allProcTextures(uint selfId, vec2 tc)  
+{
+  const uvec2 tableVal = allProcTextures[selfId];
+  const uint tag = tableVal.x;
+  selfId         = tableVal.y;
+  switch(tag) 
+  {
+    case TAG_YELLOW_NOISE: return YellowNoise_Evaluate_allProcTextures(selfId,tc);
+    case TAG_MANDELBROT: return Mandelbrot2D_Evaluate_allProcTextures(selfId,tc);
+    case TAG_OCEAN: return Ocean2D_Evaluate_allProcTextures(selfId,tc);
+    case TAG_VORONOI: return Voronoi2D_Evaluate_allProcTextures(selfId,tc);
+    case TAG_PERLIN: return Perlin2D_Evaluate_allProcTextures(selfId,tc);
+    case TAG_JULIA: return Julia2D_Evaluate_allProcTextures(selfId,tc);
+    case TAG_MANDELB_PS3D: return Pseudeo3DMandelbrot_Evaluate_allProcTextures(selfId,tc);
+    default: return Empty2D_Evaluate_allProcTextures(selfId,tc);
+  };
+}
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+layout(local_size_x = 32, local_size_y = 8, local_size_z = 1) in;
+
+layout( push_constant ) uniform kernelArgs
+{
+  int a_branchMode;
+  int h; 
+  int w; 
+  uint iNumElementsZ; 
+  uint tFlagsMask;    
+} kgenArgs;
+
+
+
+void main()
+{
+  bool runThisThread = true;
+  const int y = int(gl_GlobalInvocationID[0]); 
+  const int x = int(gl_GlobalInvocationID[1]); 
+  if(y >= kgenArgs.h + 0 || x >= kgenArgs.w + 0)
+    runThisThread = false;
+    if(runThisThread)
+  {
+   
+      const vec2 texCoord = vec2(float(x)/float(kgenArgs.w),float(y)/float(kgenArgs.h));
+      const float brickColor = CheckerSignMuFract(texCoord*16.0f);
+      
+      int index = ((x + y)/((kgenArgs.w*2)/ubo.m_usedImplementations)) % (ubo.m_usedImplementations); // for BRANCHING_LITE
+      {
+        if(kgenArgs.a_branchMode == BRANCHING_MEDIUM)
+          index = ((x + y)/(128/ubo.m_usedImplementations)) % (ubo.m_usedImplementations); 
+        else if(kgenArgs.a_branchMode == BRANCHING_HEAVY)
+        {
+          if(brickColor < 0.5f)
+            index = (x + y) % ubo.m_usedImplementations;
+          else
+            index = ((x + y)/32) % (ubo.m_usedImplementations);
+        }
+      }
+
+      const vec3 color = IProcTexture2D_Evaluate_allProcTextures(index,texCoord);
+      
+      outData[y*kgenArgs.w+x] = RealColorToUint32_f3(color);
+    
+  }
+}
+

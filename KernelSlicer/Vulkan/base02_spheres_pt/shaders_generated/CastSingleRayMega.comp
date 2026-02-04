@@ -1,0 +1,100 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_ray_query : require
+
+#include "common_generated.h"
+layout(binding = 0, set = 0) buffer data0 { uint in_pakedXY[]; }; // 
+layout(binding = 1, set = 0) buffer data1 { uint out_color[]; }; // 
+layout(binding = 2, set = 0) buffer data2 { SphereMaterial spheresMaterials[]; }; // 
+layout(binding = 3, set = 0) buffer data3 { vec4 spheresPosRadius[]; }; // 
+layout(binding = 4, set = 0) buffer dataUBO { TestClass_Generated_UBO_Data ubo; };
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+layout( push_constant ) uniform kernelArgs
+{
+  uint iNumElementsX; 
+  uint iNumElementsY; 
+  uint iNumElementsZ; 
+  uint tFlagsMask;    
+} kgenArgs;
+
+///////////////////////////////////////////////////////////////// subkernels here
+void kernel_GetMaterialColor_spheresMaterials_out_color(uint tid, in Lite_Hit in_hit, uint a_sphereMatsOffset, uint out_colorOffset) 
+{
+  
+  if(in_hit.primId != -1)
+    out_color[tid + out_colorOffset] = RealColorToUint32_f3(spheresMaterials[in_hit.primId + a_sphereMatsOffset].color.xyz);
+  else
+    out_color[tid + out_colorOffset] = 0x00700000;
+
+}
+
+void kernel_InitEyeRay_in_pakedXY(uint tid, uint packedXYOffset, inout uint flags, inout vec4 rayPosAndNear, inout vec4 rayDirAndFar) 
+{
+  
+  const uint XY = in_pakedXY[tid + packedXYOffset];
+
+  const uint x = (XY & 0x0000FFFF);
+  const uint y = (XY & 0xFFFF0000) >> 16;
+
+  const vec3 rayDir = EyeRayDir(float(x), float(y), float(ubo.m_width), float(ubo.m_height), ubo.m_worldViewProjInv); 
+  const vec3 rayPos = vec3(0.0f, 0.0f, 0.0f);
+  
+  rayPosAndNear = vec4(rayPos, 0.0f);
+  rayDirAndFar  = vec4(rayDir, FLT_MAX);
+  flags         = 0;
+
+}
+
+void kernel_RayTrace(uint tid, in vec4 rayPosAndNear, inout vec4 rayDirAndFar, in uint flags, inout Lite_Hit out_hit) 
+{
+  
+  if((flags & THREAD_IS_DEAD) != 0)
+    return;
+
+  const vec3 rayPos = rayPosAndNear.xyz;
+  const vec3 rayDir = rayDirAndFar.xyz;
+
+  Lite_Hit res;
+  res.primId = -1;
+  res.instId = -1;
+  res.geomId = -1;
+  res.t      = FLT_MAX;
+  
+  for(int sphereId=0;sphereId<ubo.spheresPosRadius_size;sphereId++)
+  {
+    const vec2 tNearAndFar = RaySphereHit(rayPos, rayDir, spheresPosRadius[sphereId]);
+  
+    if(tNearAndFar.x < tNearAndFar.y && tNearAndFar.x > 0.0f && tNearAndFar.x < res.t)
+    {
+      res.t      = tNearAndFar.x;
+      res.primId = sphereId;
+    }
+  }
+
+  out_hit = res;
+
+}
+
+///////////////////////////////////////////////////////////////// subkernels here
+
+void main()
+{
+  ///////////////////////////////////////////////////////////////// prolog
+  const uint tid = uint(gl_GlobalInvocationID[0]); 
+  ///////////////////////////////////////////////////////////////// prolog
+  
+  vec4 rayPosAndNear,  rayDirAndFar;
+  uint   flags;
+  kernel_InitEyeRay_in_pakedXY(tid, 0, flags, rayPosAndNear, rayDirAndFar);
+
+  Lite_Hit hit;
+  kernel_RayTrace(tid, rayPosAndNear, rayDirAndFar, flags, hit);
+  
+  kernel_GetMaterialColor_spheresMaterials_out_color(tid, hit, 0, 0);
+
+}
+

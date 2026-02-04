@@ -1,0 +1,123 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+#include "common_generated.h"
+
+layout(binding = 0, set = 0) buffer data0 { float a_data[]; }; //
+layout(binding = 1, set = 0) buffer data1 { float tmpred04[]; }; //
+layout(binding = 2, set = 0) buffer data2 { float tmpred14[]; }; //
+layout(binding = 3, set = 0) buffer data3 { float tmpred24[]; }; //
+layout(binding = 4, set = 0) buffer data4 { float tmpred34[]; }; //
+layout(binding = 5, set = 0) buffer dataUBO { Numbers_Generated_UBO_Data ubo; };
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout( push_constant ) uniform kernelArgs
+{
+  int a_dataSize; 
+  uint iNumElementsY; 
+  uint iNumElementsZ; 
+  uint tFlagsMask;    
+} kgenArgs;
+
+shared float m_summShared[256*1*1];
+shared float m_summSQShared[256*1*1];
+shared float m_minValShared[256*1*1];
+shared float m_maxValShared[256*1*1];
+
+void main()
+{
+  const uint globalId = gl_GlobalInvocationID[0];
+  const uint localId  = gl_LocalInvocationID[0];
+  m_summShared[localId] = (globalId < kgenArgs.a_dataSize) ?  tmpred34[kgenArgs.iNumElementsY + globalId]  :  0; // use kgenArgs.iNumElementsY for 'InputOffset'
+  m_summSQShared[localId] = (globalId < kgenArgs.a_dataSize) ?  tmpred24[kgenArgs.iNumElementsY + globalId]  :  0; // use kgenArgs.iNumElementsY for 'InputOffset'
+  m_minValShared[localId] = (globalId < kgenArgs.a_dataSize) ?  tmpred14[kgenArgs.iNumElementsY + globalId]  :  float(FLT_MAX); // use kgenArgs.iNumElementsY for 'InputOffset'
+  m_maxValShared[localId] = (globalId < kgenArgs.a_dataSize) ?  tmpred04[kgenArgs.iNumElementsY + globalId]  :  float(-FLT_MAX); // use kgenArgs.iNumElementsY for 'InputOffset'
+  barrier();
+  if (localId < 128) 
+  {
+    m_summShared[localId] += m_summShared[localId + 128];
+    m_summSQShared[localId] += m_summSQShared[localId + 128];
+    m_minValShared[localId] = min(m_minValShared[localId], m_minValShared[localId + 128]);
+    m_maxValShared[localId] = max(m_maxValShared[localId], m_maxValShared[localId + 128]);
+  }
+  barrier();
+  if (localId < 64) 
+  {
+    m_summShared[localId] += m_summShared[localId + 64];
+    m_summSQShared[localId] += m_summSQShared[localId + 64];
+    m_minValShared[localId] = min(m_minValShared[localId], m_minValShared[localId + 64]);
+    m_maxValShared[localId] = max(m_maxValShared[localId], m_maxValShared[localId + 64]);
+  }
+  barrier();
+  if (localId < 32) 
+  {
+    m_summShared[localId] += m_summShared[localId + 32];
+    m_summSQShared[localId] += m_summSQShared[localId + 32];
+    m_minValShared[localId] = min(m_minValShared[localId], m_minValShared[localId + 32]);
+    m_maxValShared[localId] = max(m_maxValShared[localId], m_maxValShared[localId + 32]);
+  }
+  barrier();
+  if (localId < 16) 
+  {
+    m_summShared[localId] += m_summShared[localId + 16];
+    m_summSQShared[localId] += m_summSQShared[localId + 16];
+    m_minValShared[localId] = min(m_minValShared[localId], m_minValShared[localId + 16]);
+    m_maxValShared[localId] = max(m_maxValShared[localId], m_maxValShared[localId + 16]);
+  }
+  barrier();
+  if (localId < 8) 
+  {
+    m_summShared[localId] += m_summShared[localId + 8];
+    m_summSQShared[localId] += m_summSQShared[localId + 8];
+    m_minValShared[localId] = min(m_minValShared[localId], m_minValShared[localId + 8]);
+    m_maxValShared[localId] = max(m_maxValShared[localId], m_maxValShared[localId + 8]);
+  }
+  barrier();
+  if (localId < 4) 
+  {
+    m_summShared[localId] += m_summShared[localId + 4];
+    m_summSQShared[localId] += m_summSQShared[localId + 4];
+    m_minValShared[localId] = min(m_minValShared[localId], m_minValShared[localId + 4]);
+    m_maxValShared[localId] = max(m_maxValShared[localId], m_maxValShared[localId + 4]);
+  }
+  barrier();
+  if (localId < 2) 
+  {
+    m_summShared[localId] += m_summShared[localId + 2];
+    m_summSQShared[localId] += m_summSQShared[localId + 2];
+    m_minValShared[localId] = min(m_minValShared[localId], m_minValShared[localId + 2]);
+    m_maxValShared[localId] = max(m_maxValShared[localId], m_maxValShared[localId + 2]);
+  }
+  barrier();
+  if (localId < 1) 
+  {
+    m_summShared[localId] += m_summShared[localId + 1];
+    m_summSQShared[localId] += m_summSQShared[localId + 1];
+    m_minValShared[localId] = min(m_minValShared[localId], m_minValShared[localId + 1]);
+    m_maxValShared[localId] = max(m_maxValShared[localId], m_maxValShared[localId + 1]);
+  }
+  barrier();
+ 
+  if(localId == 0)
+  {
+    if((kgenArgs.tFlagsMask & KGEN_REDUCTION_LAST_STEP) != 0)
+    {
+      ubo.m_summ += m_summShared[0];
+      ubo.m_summSQ += m_summSQShared[0];
+      ubo.m_minVal = min(ubo.m_minVal, m_minValShared[0]);
+      ubo.m_maxVal = max(ubo.m_maxVal, m_maxValShared[0]);
+    }
+    else
+    {
+      tmpred34[kgenArgs.iNumElementsZ + gl_WorkGroupID[0]] = m_summShared[0];     // use kgenArgs.iNumElementsZ for 'OutputOffset'
+      tmpred24[kgenArgs.iNumElementsZ + gl_WorkGroupID[0]] = m_summSQShared[0];     // use kgenArgs.iNumElementsZ for 'OutputOffset'
+      tmpred14[kgenArgs.iNumElementsZ + gl_WorkGroupID[0]] = m_minValShared[0];     // use kgenArgs.iNumElementsZ for 'OutputOffset'
+      tmpred04[kgenArgs.iNumElementsZ + gl_WorkGroupID[0]] = m_maxValShared[0];     // use kgenArgs.iNumElementsZ for 'OutputOffset'
+    }
+  }
+}
+

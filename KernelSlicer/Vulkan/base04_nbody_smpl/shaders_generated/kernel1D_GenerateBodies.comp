@@ -1,0 +1,45 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+#include "common_generated.h"
+layout(binding = 0, set = 0) buffer data0 { BodyState m_bodies[]; }; // 
+layout(binding = 1, set = 0) buffer dataUBO { nBody_Generated_UBO_Data ubo; };
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout( push_constant ) uniform kernelArgs
+{
+  uint bodies_count; 
+  uint iNumElementsY; 
+  uint iNumElementsZ; 
+  uint tFlagsMask;    
+} kgenArgs;
+
+
+
+void main()
+{
+  bool runThisThread = true;
+  const uint i = uint(gl_GlobalInvocationID[0]); 
+  if(i >= kgenArgs.bodies_count + 0)
+    runThisThread = false;
+    if(runThisThread)
+  {
+  
+    m_bodies[i].pos_weight = randFloat4(vec4(-BOUNDARY * 0.1f, -BOUNDARY* 0.1f, -BOUNDARY* 0.1f, MASS),
+                                        vec4(BOUNDARY* 0.1f, BOUNDARY* 0.1f, BOUNDARY* 0.1f, MASS), i);
+//    m_bodies[i].vel_charge = randFloat4(make_float4(-1, -1, -1, -ELECTRON_CHARGE * CHARGE_MULT),
+//                                        make_float4(1, 1, 1, -ELECTRON_CHARGE * CHARGE_MULT), i*i + i*7 + 1);
+
+
+    if(i % 2 == 0)
+      m_bodies[i].vel_charge = vec4(0, 0, 0, ELECTRON_CHARGE * CHARGE_MULT);
+    else
+      m_bodies[i].vel_charge = vec4(0, 0, 0, -ELECTRON_CHARGE * CHARGE_MULT);
+  
+  }
+}
+

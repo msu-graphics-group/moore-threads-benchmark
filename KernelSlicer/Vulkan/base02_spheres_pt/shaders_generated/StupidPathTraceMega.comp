@@ -1,0 +1,171 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#extension GL_EXT_ray_query : require
+
+#include "common_generated.h"
+layout(binding = 0, set = 0) buffer data0 { uint in_pakedXY[]; }; // 
+layout(binding = 1, set = 0) buffer data1 { vec4 out_color[]; }; // 
+layout(binding = 2, set = 0) buffer data2 { RandomGen m_randomGens[]; }; // 
+layout(binding = 3, set = 0) buffer data3 { SphereMaterial spheresMaterials[]; }; // 
+layout(binding = 4, set = 0) buffer data4 { vec4 spheresPosRadius[]; }; // 
+layout(binding = 5, set = 0) buffer dataUBO { TestClass_Generated_UBO_Data ubo; };
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+layout( push_constant ) uniform kernelArgs
+{
+  uint a_maxDepth;
+  uint iNumElementsX; 
+  uint iNumElementsY; 
+  uint iNumElementsZ; 
+  uint tFlagsMask;    
+} kgenArgs;
+
+///////////////////////////////////////////////////////////////// subkernels here
+void kernel_ContributeToImage_in_pakedXY_out_color(uint tid, in vec4 a_accumColor, uint in_pakedXYOffset, uint out_colorOffset) 
+{
+  
+  const uint XY = in_pakedXY[tid + in_pakedXYOffset];
+  const uint x  = (XY & 0x0000FFFF);
+  const uint y  = (XY & 0xFFFF0000) >> 16;
+ 
+  out_color[y*uint(ubo.m_width)+x + out_colorOffset] += a_accumColor;
+
+}
+
+void kernel_InitEyeRay_in_pakedXY(uint tid, uint packedXYOffset, inout uint flags, inout vec4 rayPosAndNear, inout vec4 rayDirAndFar) 
+{
+  
+  const uint XY = in_pakedXY[tid + packedXYOffset];
+
+  const uint x = (XY & 0x0000FFFF);
+  const uint y = (XY & 0xFFFF0000) >> 16;
+
+  const vec3 rayDir = EyeRayDir(float(x), float(y), float(ubo.m_width), float(ubo.m_height), ubo.m_worldViewProjInv); 
+  const vec3 rayPos = vec3(0.0f, 0.0f, 0.0f);
+  
+  rayPosAndNear = vec4(rayPos, 0.0f);
+  rayDirAndFar  = vec4(rayDir, FLT_MAX);
+  flags         = 0;
+
+}
+
+void kernel_NextBounce(uint tid, in Lite_Hit in_hit, inout uint flags, inout vec4 rayPosAndNear, inout vec4 rayDirAndFar, inout vec4 accumColor, inout vec4 accumThoroughput) 
+{
+  
+  if((flags & THREAD_IS_DEAD) != 0)
+    return;
+
+  const Lite_Hit hit = in_hit;
+
+  if(hit.primId == -1)
+  {
+    flags = THREAD_IS_DEAD;
+    return;
+  }
+
+  const vec3 rayPos = rayPosAndNear.xyz;
+  const vec3 rayDir = rayDirAndFar.xyz;
+
+  if( IsMtlEmissive(spheresMaterials[hit.primId]) )
+  {
+    vec4 emissiveColor = vec4(GetMtlEmissiveColor(spheresMaterials[hit.primId]), 0.0f);
+    accumColor = emissiveColor*(accumThoroughput);
+    flags      = THREAD_IS_DEAD;
+    return;
+  }
+
+  const vec3 sphPos = spheresPosRadius[hit.primId].xyz;
+  const vec3 diffColor = GetMtlDiffuseColor(spheresMaterials[hit.primId]);
+
+  const vec3 hitPos = rayPos + rayDir*hit.t;
+  const vec3 hitNorm = normalize(hitPos - sphPos);
+
+  RandomGen gen = m_randomGens[tid];
+  const vec2 uv = rndFloat2_Pseudo(gen);
+  m_randomGens[tid] = gen;
+
+  const vec3 newDir = MapSampleToCosineDistribution(uv.x, uv.y, hitNorm, hitNorm, 1.0f);
+  const float  cosTheta = dot(newDir, hitNorm);
+
+  const float pdfVal   = cosTheta * INV_PI;
+  const vec3 brdfVal = (cosTheta > 1e-5f) ? diffColor * INV_PI : vec3(0, 0, 0);
+  const vec3 bxdfVal = brdfVal * (1.0f / max(pdfVal, 1e-10f));
+
+  const vec3 newPos = OffsRayPos(hitPos, hitNorm, newDir);  
+
+  rayPosAndNear    = vec4(newPos, 0.0f);
+  rayDirAndFar     = vec4(newDir, FLT_MAX);
+  accumThoroughput *= cosTheta*vec4(bxdfVal, 0.0f);
+
+}
+
+void kernel_RayTrace(uint tid, in vec4 rayPosAndNear, inout vec4 rayDirAndFar, in uint flags, inout Lite_Hit out_hit) 
+{
+  
+  if((flags & THREAD_IS_DEAD) != 0)
+    return;
+
+  const vec3 rayPos = rayPosAndNear.xyz;
+  const vec3 rayDir = rayDirAndFar.xyz;
+
+  Lite_Hit res;
+  res.primId = -1;
+  res.instId = -1;
+  res.geomId = -1;
+  res.t      = FLT_MAX;
+  
+  for(int sphereId=0;sphereId<ubo.spheresPosRadius_size;sphereId++)
+  {
+    const vec2 tNearAndFar = RaySphereHit(rayPos, rayDir, spheresPosRadius[sphereId]);
+  
+    if(tNearAndFar.x < tNearAndFar.y && tNearAndFar.x > 0.0f && tNearAndFar.x < res.t)
+    {
+      res.t      = tNearAndFar.x;
+      res.primId = sphereId;
+    }
+  }
+
+  out_hit = res;
+
+}
+
+void kernel_InitAccumData(uint tid, inout vec4 accumColor, inout vec4 accumuThoroughput) 
+{
+  
+  accumColor        = vec4(0, 0, 0, 0);
+  accumuThoroughput = vec4(1, 1, 1, 0);
+
+}
+
+///////////////////////////////////////////////////////////////// subkernels here
+
+void main()
+{
+  ///////////////////////////////////////////////////////////////// prolog
+  const uint tid = uint(gl_GlobalInvocationID[0]); 
+  ///////////////////////////////////////////////////////////////// prolog
+  
+  vec4 accumColor,  accumThoroughput;
+  kernel_InitAccumData(tid, accumColor, accumThoroughput);
+
+  vec4 rayPosAndNear,  rayDirAndFar;
+  uint   flags;
+  kernel_InitEyeRay_in_pakedXY(tid, 0, flags, rayPosAndNear, rayDirAndFar);
+
+  for(int depth = 0; uint(depth) < kgenArgs.a_maxDepth; depth++) 
+  {
+    Lite_Hit hit;
+    kernel_RayTrace(tid, rayPosAndNear, rayDirAndFar, flags,
+                    hit);
+
+    kernel_NextBounce(tid, hit, 
+                      flags, rayPosAndNear, rayDirAndFar, accumColor, accumThoroughput);
+  }
+
+  kernel_ContributeToImage_in_pakedXY_out_color(tid, accumColor, 0, 0);
+
+}
+

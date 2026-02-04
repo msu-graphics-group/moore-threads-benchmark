@@ -1,0 +1,39 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+#include "common_generated.h"
+layout(binding = 0, set = 0) buffer data0 { int a_data[]; }; // 
+layout(binding = 1, set = 0) buffer data1 { int m_values[]; }; // 
+layout(binding = 2, set = 0) buffer dataUBO { PrefSummTest_Generated_UBO_Data ubo; };
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+layout( push_constant ) uniform kernelArgs
+{
+  int a_size; 
+  uint iNumElementsY; 
+  uint iNumElementsZ; 
+  uint tFlagsMask;    
+} kgenArgs;
+
+
+
+void main()
+{
+  bool runThisThread = true;
+  const int i = int(gl_GlobalInvocationID[0]); 
+  if(i >= kgenArgs.a_size + 0)
+    runThisThread = false;
+    if(runThisThread)
+  {
+  
+    const int val = a_data[i];
+    if(val != 0)
+      { uint offset = atomicAdd(ubo.m_values_size, 1); m_values[offset] = val;};
+  
+  }
+}
+

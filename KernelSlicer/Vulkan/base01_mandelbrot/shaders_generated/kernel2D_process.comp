@@ -1,0 +1,45 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+
+#include "common_generated.h"
+layout(binding = 0, set = 0) buffer data0 { uint outData[]; }; // 
+layout(binding = 1, set = 0) buffer dataUBO { Mandelbrot_Generated_UBO_Data ubo; };
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+layout(local_size_x = 32, local_size_y = 8, local_size_z = 1) in;
+
+layout( push_constant ) uniform kernelArgs
+{
+  int w; 
+  int h; 
+  uint iNumElementsZ; 
+  uint tFlagsMask;    
+} kgenArgs;
+
+
+
+void main()
+{
+  bool runThisThread = true;
+  const int x = int(gl_GlobalInvocationID[0]); 
+  const int y = int(gl_GlobalInvocationID[1]); 
+  if(x >= kgenArgs.w + 0 || y >= kgenArgs.h + 0)
+    runThisThread = false;
+    if(runThisThread)
+  {
+    
+      const float tx  = 0.5f*(float(x) - (0.75f * float(kgenArgs.w))) / (kgenArgs.w / 4);
+      const float ty  = 0.5f*(float(y) - (kgenArgs.h / 2)) / (kgenArgs.h / 4);
+      const int index = mandel(tx, ty, 100);
+
+      int r1 = min((index*128)/32, 255);
+      int g1 = min((index*128)/25, 255);
+      int b1 = min((index*index), 255);
+
+      outData[y*kgenArgs.w+x] = 0xFF000000 | uint((r1)) | (g1 << 8) | (b1 << 16);
+    
+  }
+}
+
