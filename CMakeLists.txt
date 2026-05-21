@@ -25,8 +25,8 @@ if(MSVC)
 endif()
 
 set(API CUDA CACHE STRING "")
-set_property(CACHE API PROPERTY STRINGS CUDA MUSA VULKAN)
-if(NOT "${API}" MATCHES "^(CUDA|MUSA|VULKAN)$")
+set_property(CACHE API PROPERTY STRINGS "CUDA" "HIP" "MUSA" "VULKAN")
+if(NOT "${API}" MATCHES "^(CUDA|HIP|MUSA|VULKAN)$")
   message(FATAL_ERROR "Unknown API '${API}'")
 endif()
 
@@ -47,6 +47,13 @@ if("${API}" STREQUAL "CUDA")
   set(CMAKE_CUDA_STANDARD_REQUIRED ON)
   set(API_CUDA ON)
   add_compile_definitions(API_CUDA)
+
+elseif("${API}" STREQUAL "HIP")
+  set(CMAKE_HIP_PLATFORM amd)
+  enable_language(HIP)
+  find_package(hip REQUIRED)
+  set(API_HIP ON)
+  add_compile_definitions(API_HIP)
 endif()
 
 
@@ -98,8 +105,9 @@ discover_sources("${ROOT_DIR}/Core" CORE_HEADERS CORE_SOURCES)
 add_executable(Core ${CORE_HEADERS} ${CORE_SOURCES})
 target_include_directories(Core PRIVATE "${ROOT_DIR}/Core")
 if(API_CUDA)
-  target_include_directories(Core PRIVATE "${CUDAToolkit_INCLUDE_DIRS}")
   target_link_libraries(Core PRIVATE CUDA::cudart)
+elseif(API_HIP)
+  target_link_libraries(Core PRIVATE hip::host)
 endif()
 
 add_custom_command(TARGET Core POST_BUILD

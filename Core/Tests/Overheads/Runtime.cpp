@@ -29,7 +29,7 @@ class cudaMallocImpl : public CudaEventBenchmark<size_t> {
 
     virtual void CleanUp() override {
       for (auto ptr : allocations) {
-        Api::cudaFree(ptr);
+        HANDLE_ERROR(Api::cudaFree(ptr));
       }
       allocations.clear();
     }

@@ -16,6 +16,14 @@ struct Cuda {
   using cudaMemcpyKind = ::cudaMemcpyKind;
   using cudaStream_t   = ::cudaStream_t;
 
+  enum {
+    cudaSuccess = ::cudaSuccess
+  };
+
+  static cudaError_t cudaGetLastError() {
+    return ::cudaGetLastError();
+  }
+
   static const char *cudaGetErrorString(cudaError_t error) {
     return ::cudaGetErrorString(error);
   }
@@ -65,10 +73,6 @@ struct Cuda {
 
   static cudaError_t cudaEventSynchronize(cudaEvent_t event) {
     return ::cudaEventSynchronize(event);
-  }
-
-  static cudaError_t cudaGetLastError() {
-    return ::cudaGetLastError();
   }
 
   static cudaError_t cudaDeviceSynchronize() {

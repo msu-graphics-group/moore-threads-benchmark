@@ -4,11 +4,14 @@
 #if defined(API_CUDA)
   #include "Api/Cuda.h"
   using Api = Cuda;
+#elif defined(API_HIP)
+  #include "Api/Hip.h"
+  using Api = Hip;
 #endif
 
 static inline void HandleError(Api::cudaError_t err, const char* file, int line)
 {
-  if (err != Api::cudaError_t::cudaSuccess)
+  if (err != Api::cudaSuccess)
   {
     std::ostringstream oss;
     oss << file << ":" << line << ": " << Api::cudaGetErrorString(err);

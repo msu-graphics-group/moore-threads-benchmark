@@ -1,0 +1,79 @@
+#pragma once
+
+#include <hip/hip_runtime.h>
+
+
+struct Hip {
+  Hip() = delete;
+  Hip(const Hip &) = delete;
+  Hip &operator=(const Hip &) = delete;
+
+  using cudaError_t    = hipError_t;
+  using cudaEvent_t    = hipEvent_t;
+  using cudaDeviceProp = hipDeviceProp_t;
+  using cudaMemcpyKind = hipMemcpyKind;
+  using cudaStream_t   = hipStream_t;
+
+  enum {
+    cudaSuccess = ::hipSuccess
+  };
+
+  static cudaError_t cudaGetLastError() {
+    return ::hipGetLastError();
+  }
+
+  static const char *cudaGetErrorString(cudaError_t error) {
+    return ::hipGetErrorString(error);
+  }
+
+  static cudaError_t cudaGetDeviceCount(int *count) {
+    return ::hipGetDeviceCount(count);
+  }
+
+  static cudaError_t cudaSetDevice(int device) {
+    return ::hipSetDevice(device);
+  }
+
+  static cudaError_t cudaGetDeviceProperties(cudaDeviceProp *prop, int device) {
+    return ::hipGetDeviceProperties(prop, device);
+  }
+
+  template<class T>
+  static cudaError_t cudaMalloc(T **devPtr, size_t size) {
+    return ::hipMalloc(devPtr, size);
+  }
+  
+  template<class T>
+  static cudaError_t cudaFree(T *devPtr) {
+    return ::hipFree(devPtr);
+  }
+
+  template<class T>
+  static cudaError_t cudaMemcpy(T *dst, const T *src, size_t count, cudaMemcpyKind kind) {
+    return ::hipMemcpy(dst, src, count, kind);
+  }
+
+  static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
+    return ::hipEventRecord(event, stream);
+  }
+
+  static cudaError_t cudaEventCreate(cudaEvent_t *event) {
+    return ::hipEventCreate(event);
+  }
+
+  static cudaError_t cudaEventDestroy(cudaEvent_t event) {
+    return ::hipEventDestroy(event);
+  }
+
+  static cudaError_t cudaEventElapsedTime(float *ms, cudaEvent_t start, cudaEvent_t end) {
+    return ::hipEventElapsedTime(ms, start, end);
+  }
+
+  static cudaError_t cudaEventSynchronize(cudaEvent_t event) {
+    return ::hipEventSynchronize(event);
+  }
+
+  static cudaError_t cudaDeviceSynchronize() {
+    return ::hipDeviceSynchronize();
+  }
+};
