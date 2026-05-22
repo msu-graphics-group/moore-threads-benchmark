@@ -7,6 +7,9 @@
 #elif defined(API_HIP)
   #include "Api/Hip.h"
   using Api = Hip;
+#elif defined(API_MUSA)
+  #include "Api/Musa.h"
+  using Api = Musa;
 #endif
 
 static inline void HandleError(Api::cudaError_t err, const char* file, int line)

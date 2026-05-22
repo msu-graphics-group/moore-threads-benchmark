@@ -1,77 +1,77 @@
 #pragma once
 
-#include <hip/hip_runtime.h>
+#include <musa_runtime.h>
 
 
-struct Hip {
-  Hip() = delete;
-  Hip(const Hip &) = delete;
-  Hip &operator=(const Hip &) = delete;
+struct Musa {
+  Musa() = delete;
+  Musa(const Musa &) = delete;
+  Musa &operator=(const Musa &) = delete;
 
-  using cudaError_t    = hipError_t;
-  using cudaEvent_t    = hipEvent_t;
-  using cudaDeviceProp = hipDeviceProp_t;
-  using cudaMemcpyKind = hipMemcpyKind;
-  using cudaStream_t   = hipStream_t;
+  using cudaError_t    = musaError_t;
+  using cudaEvent_t    = musaEvent_t;
+  using cudaDeviceProp = musaDeviceProp;
+  using cudaMemcpyKind = musaMemcpyKind;
+  using cudaStream_t   = musaStream_t;
 
-  static constexpr cudaError_t cudaSuccess = ::hipSuccess;
+  static constexpr cudaError_t cudaSuccess = musaSuccess;
 
   static cudaError_t cudaGetLastError() {
-    return ::hipGetLastError();
+    return ::musaGetLastError();
   }
 
   static const char *cudaGetErrorString(cudaError_t error) {
-    return ::hipGetErrorString(error);
+    return ::musaGetErrorString(error);
   }
 
   static cudaError_t cudaGetDeviceCount(int *count) {
-    return ::hipGetDeviceCount(count);
+    return ::musaGetDeviceCount(count);
   }
 
   static cudaError_t cudaSetDevice(int device) {
-    return ::hipSetDevice(device);
+    return ::musaSetDevice(device);
   }
 
   static cudaError_t cudaGetDeviceProperties(cudaDeviceProp *prop, int device) {
-    return ::hipGetDeviceProperties(prop, device);
+    return ::musaGetDeviceProperties(prop, device);
   }
 
   template<class T>
   static cudaError_t cudaMalloc(T **devPtr, size_t size) {
-    return ::hipMalloc(devPtr, size);
+    return ::musaMalloc(devPtr, size);
   }
   
   template<class T>
   static cudaError_t cudaFree(T *devPtr) {
-    return ::hipFree(devPtr);
+    return ::musaFree(devPtr);
   }
 
   template<class T>
   static cudaError_t cudaMemcpy(T *dst, const T *src, size_t count, cudaMemcpyKind kind) {
-    return ::hipMemcpy(dst, src, count, kind);
+    return ::musaMemcpy(dst, src, count, kind);
   }
 
   static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
-    return ::hipEventRecord(event, stream);
+    return ::musaEventRecord(event, stream);
   }
 
   static cudaError_t cudaEventCreate(cudaEvent_t *event) {
-    return ::hipEventCreate(event);
+    return ::musaEventCreate(event);
   }
 
   static cudaError_t cudaEventDestroy(cudaEvent_t event) {
-    return ::hipEventDestroy(event);
+    return ::musaEventDestroy(event);
   }
 
   static cudaError_t cudaEventElapsedTime(float *ms, cudaEvent_t start, cudaEvent_t end) {
-    return ::hipEventElapsedTime(ms, start, end);
+    return ::musaEventElapsedTime(ms, start, end);
   }
 
   static cudaError_t cudaEventSynchronize(cudaEvent_t event) {
-    return ::hipEventSynchronize(event);
+    return ::musaEventSynchronize(event);
   }
 
   static cudaError_t cudaDeviceSynchronize() {
-    return ::hipDeviceSynchronize();
+    return ::musaDeviceSynchronize();
   }
 };

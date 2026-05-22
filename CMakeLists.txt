@@ -54,6 +54,12 @@ elseif("${API}" STREQUAL "HIP")
   find_package(hip REQUIRED)
   set(API_HIP ON)
   add_compile_definitions(API_HIP)
+
+elseif("${API}" STREQUAL "MUSA")
+  list(APPEND CMAKE_MODULE_PATH "/usr/local/musa/cmake")
+  find_package(MUSA REQUIRED)
+  set(API_MUSA ON)
+  add_compile_definitions(API_MUSA)
 endif()
 
 
@@ -108,6 +114,8 @@ if(API_CUDA)
   target_link_libraries(Core PRIVATE CUDA::cudart)
 elseif(API_HIP)
   target_link_libraries(Core PRIVATE hip::host)
+elseif(API_MUSA)
+  target_link_libraries(Core PRIVATE MUSA::musart)
 endif()
 
 add_custom_command(TARGET Core POST_BUILD
