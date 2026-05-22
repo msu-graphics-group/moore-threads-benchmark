@@ -57,7 +57,7 @@ elseif("${API}" STREQUAL "HIP")
 
 elseif("${API}" STREQUAL "MUSA")
   list(APPEND CMAKE_MODULE_PATH "/usr/local/musa/cmake")
-  find_package(MUSA REQUIRED)
+  find_package(MUSAToolkit REQUIRED)
   set(API_MUSA ON)
   add_compile_definitions(API_MUSA)
 endif()
