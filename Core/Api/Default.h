@@ -10,6 +10,8 @@
 #elif defined(API_MUSA)
   #include "Api/Musa.h"
   using Api = Musa;
+#else
+  #error API not specified, you should recompile benchmark with the option like '-DAPI=CUDA' or '-DAPI=MUSA'
 #endif
 
 static inline void HandleError(Api::cudaError_t err, const char* file, int line)

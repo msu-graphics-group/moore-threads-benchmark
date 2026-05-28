@@ -11,11 +11,11 @@ class Framework {
 
     // Sets new stream for user-friendly text output
     // By default, this stream is disabled
-    void SetTextStream(std::ostream &text);
+    void SetTextStream(std::ostream &text) { text_stream_ = text; }
 
     // Sets new stream for CSV output
     // By default, this stream is disabled
-    void SetCsvStream(std::ostream &csv);
+    void SetCsvStream(std::ostream &csv) { csv_stream_ = csv; }
 
     // Sets new tag that will be assigned to all following benchmarks
     // Benchmarks with the same tag will be grouped together in the output

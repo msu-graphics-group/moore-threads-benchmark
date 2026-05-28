@@ -16,9 +16,7 @@ struct Cuda {
   using cudaMemcpyKind = ::cudaMemcpyKind;
   using cudaStream_t   = ::cudaStream_t;
 
-  enum {
-    cudaSuccess = ::cudaSuccess
-  };
+  static constexpr cudaError_t cudaSuccess = ::cudaSuccess;
 
   static cudaError_t cudaGetLastError() {
     return ::cudaGetLastError();

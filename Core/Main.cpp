@@ -1,20 +1,17 @@
 #include "Defs.h"
 
+#include "Microbenchmarks/Framework.h"
 #include "Tests/Overheads.h"
+
 
 int main() {
   try {
-    Api::cudaDeviceProp props;
-    std::memset(&props, 0, sizeof(props));
-    HANDLE_ERROR(Api::cudaGetDeviceProperties(&props, 0));
-    std::cout << props.name << std::endl
-              << "     major.minor:         " << props.major << '.' << props.minor << std::endl
-              << "     multiProcessorCount: " << props.multiProcessorCount << std::endl
-              << "     totalGlobalMem:      " << props.totalGlobalMem << std::endl
-              << "     warpSize:            " << props.warpSize << std::endl;
+    // Just a draft, will be replaced by a special framework
+    Framework framework(0, 0, 0);
+    framework.SetTextStream(std::cout);
+    framework.Run();
     std::cout << std::endl;
 
-    // Just a draft, will be replaced by a special framework
     auto tests = { overheads::cudaMallocTest(),
                    overheads::cudaFreeTest() };
 
