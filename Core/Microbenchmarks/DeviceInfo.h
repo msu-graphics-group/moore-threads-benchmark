@@ -1,0 +1,41 @@
+#pragma once
+#include "Defs.h"
+
+// Estimated peak performance of the selected device
+// Note: these estimates may be inaccurate due to various factors:
+//   - GPU clock boost states
+//   - Unaccounted GPU architecture specifics
+//   - Inaccuracies in our performance formulas
+struct TheoreticalPerformance {
+  // Performance of regular SIMT cores
+  // Measured in floating-point operations per second (flops)
+  uint64_t simt_fp64, simt_fp32, simt_fp16, simt_fp8;
+
+  // Performance of tensor cores
+  // Measured in floating-point operations per second (flops)
+  uint64_t tensor_fp64, tensor_fp32, tensor_fp16, tensor_fp8;
+
+  // Memory bandwidth of device memory and interconnect used to communicate with the host
+  // Measured in bytes per second (B/s)
+  uint64_t memory_bandwidth, interconnect_bandwidth;
+};
+
+struct DeviceInfo {
+  // Represents a device parameter with its technical name and user-friendly display value
+  // Example: { "totalGlobalMem", "16.0 GB" }
+  using Parameter = std::pair<std::string, std::string>;
+
+  // Groups related device parameters into a categorized structure
+  // Example: { "Global memory", { {"totalGlobalMem", "16.0 GB"}, {"memoryClockRate", "1200 MHz"} } }
+  using ParameterCategory = std::pair<std::string, std::vector<Parameter>>;
+
+  // Name of the device as returned by the underlying API
+  std::string name;
+
+  // Technical specifications of the device organized by category (e.g., 'Multiprocessor', 'Caches', etc)
+  // Since CUDA, HiP, and MUSA APIs have some differences, some parameters may be missing
+  std::vector<ParameterCategory> specifications;
+};
+
+// Retrieves detailed information about a specific GPU device
+DeviceInfo GetDeviceInfo(int device);
