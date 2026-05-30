@@ -7,17 +7,20 @@
 //   - Unaccounted GPU architecture specifics
 //   - Inaccuracies in our performance formulas
 struct TheoreticalPerformance {
+  // The total number of SIMT/tensor cores on the GPU
+  size_t simt_cores{}, tensor_cores{};
+
   // Performance of regular SIMT cores
   // Measured in floating-point operations per second (flops)
-  uint64_t simt_fp64, simt_fp32, simt_fp16, simt_fp8;
+  uint64_t simt_fp64{}, simt_fp32{}, simt_fp16{}, simt_fp8{};
 
   // Performance of tensor cores
   // Measured in floating-point operations per second (flops)
-  uint64_t tensor_fp64, tensor_fp32, tensor_fp16, tensor_fp8;
+  uint64_t tensor_fp64{}, tensor_fp32{}, tensor_fp16{}, tensor_fp8{};
 
-  // Memory bandwidth of device memory and interconnect used to communicate with the host
+  // Memory bandwidth of device global memory
   // Measured in bytes per second (B/s)
-  uint64_t memory_bandwidth, interconnect_bandwidth;
+  uint64_t memory_bandwidth{};
 };
 
 struct DeviceInfo {
@@ -31,6 +34,8 @@ struct DeviceInfo {
 
   // Name of the device as returned by the underlying API
   std::string name;
+
+  TheoreticalPerformance performance;
 
   // Technical specifications of the device organized by category (e.g., 'Multiprocessor', 'Caches', etc)
   // Since CUDA, HiP, and MUSA APIs have some differences, some parameters may be missing
