@@ -12,11 +12,11 @@ struct TheoreticalPerformance {
 
   // Performance of regular SIMT cores
   // Measured in floating-point operations per second (flops)
-  uint64_t simt_fp64{}, simt_fp32{}, simt_fp16{}, simt_fp8{};
+  uint64_t simt_fp64{}, simt_fp32{}, simt_fp16{};
 
   // Performance of tensor cores
   // Measured in floating-point operations per second (flops)
-  uint64_t tensor_fp64{}, tensor_fp32{}, tensor_fp16{}, tensor_fp8{};
+  uint64_t tensor_fp64{}, tensor_fp32{}, tensor_fp16{};
 
   // Memory bandwidth of device global memory
   // Measured in bytes per second (B/s)

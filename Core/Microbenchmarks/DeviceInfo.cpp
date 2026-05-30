@@ -8,6 +8,185 @@
 #include <sstream>
 #include <cstdint>
 
+//-------------------------------
+//--- EstimateCudaPerformance ---
+//-------------------------------
+
+namespace {
+
+enum class NvidiaArchitecture {
+  Unknown,
+  Kepler,    // 2012 (GK)
+  Maxwell,   // 2014 (GM)
+  Pascal,    // 2016 (GP)
+  Volta,     // 2017 (GV)
+  Turing,    // 2018 (TU)
+  Ampere,    // 2020 (GA)
+  Ada,       // 2022 (AD)
+  Hopper,    // 2022 (GH)
+  Blackwell  // 2024 (GB)
+};
+
+TheoreticalPerformance EstimateCudaPerformance(int major, int minor,
+                                               int sm_count, int core_clock_rate,
+                                               int memory_bus_width, int memory_clock_rate) {
+    TheoreticalPerformance perf;
+
+    NvidiaArchitecture arch{ NvidiaArchitecture::Unknown };
+    int simt_cores_per_sm{};
+    int tensor_cores_per_sm{};
+    int fp32_per_simt_core{};
+    int fp16_per_simt_core{};
+    double fp64_per_simt_core{};
+    int fp16_per_tensor_core{};
+    int fp32_per_tensor_core{};
+    int fp64_per_tensor_core{};
+
+    if (major == 3) {
+      arch                  = NvidiaArchitecture::Kepler;
+      simt_cores_per_sm     = 192;
+      tensor_cores_per_sm   = 0;
+
+      fp32_per_simt_core    = 2;
+      fp16_per_simt_core    = 0;
+      fp64_per_simt_core    = (minor == 5) ? (2.0 / 3.0) : (2.0 / 24.0);
+      fp16_per_tensor_core  = 0;
+      fp32_per_tensor_core  = 0;
+      fp64_per_tensor_core  = 0;
+    }
+    else if (major == 5) {
+      arch                  = NvidiaArchitecture::Maxwell;
+      simt_cores_per_sm     = 128;
+      tensor_cores_per_sm   = 0;
+
+      fp32_per_simt_core    = 2;
+      fp16_per_simt_core    = 0;
+      fp64_per_simt_core    = 2.0 / 32.0;
+      fp16_per_tensor_core  = 0;
+      fp32_per_tensor_core  = 0;
+      fp64_per_tensor_core  = 0;
+    }
+    else if (major == 6) {
+      arch                  = NvidiaArchitecture::Pascal;
+      tensor_cores_per_sm   = 0;
+
+      if (minor == 0) {
+        simt_cores_per_sm   = 64;
+        fp32_per_simt_core  = 2;
+        fp16_per_simt_core  = 4;
+        fp64_per_simt_core  = 1.0;
+       } 
+       else {
+        simt_cores_per_sm   = 128;
+        fp32_per_simt_core  = 2;
+        fp16_per_simt_core  = 2 / 64.0;
+        fp64_per_simt_core  = 2 / 32.0;
+      }
+    }
+    else if (major == 7) {
+      fp32_per_simt_core    = 2;
+      fp16_per_simt_core    = 4;
+
+      if (minor == 0 || minor == 2) {
+        arch = NvidiaArchitecture::Volta;
+        fp64_per_simt_core  = 2.0 * 0.5;
+      }
+      else {
+        arch = NvidiaArchitecture::Turing;
+        fp64_per_simt_core  = 2.0 / 32.0;
+      }
+
+      simt_cores_per_sm     = 64;
+      tensor_cores_per_sm   = 8;
+      fp16_per_tensor_core  = 128;
+      fp32_per_tensor_core  = 0;
+      fp64_per_tensor_core  = 0;
+    }
+    else if (major == 8) {
+      if (minor == 9) {
+        arch                = NvidiaArchitecture::Ada;
+        simt_cores_per_sm   = 128;
+        tensor_cores_per_sm = 4;
+
+        fp32_per_simt_core  = 2;
+        fp16_per_simt_core  = 4;
+        fp64_per_simt_core  = 2.0 / 128.0;
+        fp16_per_tensor_core = 512;
+        fp32_per_tensor_core = 512;
+        fp64_per_tensor_core = 0;
+      }
+      else {
+        arch                = NvidiaArchitecture::Ampere;
+        if (minor == 0) {
+          simt_cores_per_sm = 64;
+        } else {
+          simt_cores_per_sm = 128;
+        }
+        tensor_cores_per_sm = 4;
+
+        fp32_per_simt_core  = 2;
+        fp16_per_simt_core  = 4;
+        fp64_per_simt_core  = (minor == 0) ? (2.0 * 0.5) : (2.0 / 64.0);
+        fp16_per_tensor_core = 512;
+        fp32_per_tensor_core = 512;
+        fp64_per_tensor_core = (minor == 0) ? 16 : 0;
+      }
+    }
+    else if (major == 9) {
+      arch                  = NvidiaArchitecture::Hopper;
+      simt_cores_per_sm     = 128;
+      tensor_cores_per_sm   = 4;
+
+      fp32_per_simt_core    = 2;
+      fp16_per_simt_core    = 4;
+      fp64_per_simt_core    = 2.0 * 0.5;
+      fp16_per_tensor_core  = 512;
+      fp32_per_tensor_core  = 512;
+      fp64_per_tensor_core  = 16;
+    }
+    else if (major == 10) {
+      arch                  = NvidiaArchitecture::Blackwell;
+      simt_cores_per_sm     = 128;
+      tensor_cores_per_sm   = 4;
+
+      fp32_per_simt_core    = 2;
+      fp16_per_simt_core    = 4;
+      fp64_per_simt_core    = 2.0 / 64.0;
+      fp16_per_tensor_core  = 512;
+      fp32_per_tensor_core  = 512;
+      fp64_per_tensor_core  = 16;
+    }
+    else {
+      arch                  = NvidiaArchitecture::Unknown;
+      simt_cores_per_sm     = 0;
+      tensor_cores_per_sm   = 0;
+
+      fp32_per_simt_core    = 0;
+      fp16_per_simt_core    = 0;
+      fp64_per_simt_core    = 0.0;
+      fp16_per_tensor_core  = 0;
+      fp32_per_tensor_core  = 0;
+      fp64_per_tensor_core  = 0;
+    }
+
+    perf.simt_cores = sm_count * simt_cores_per_sm;
+    perf.simt_fp32 = (uint64_t)perf.simt_cores * fp32_per_simt_core * core_clock_rate * 1000;
+    perf.simt_fp16 = (uint64_t)perf.simt_cores * fp16_per_simt_core * core_clock_rate * 1000;
+    perf.simt_fp64 = (uint64_t)(perf.simt_cores * fp64_per_simt_core * core_clock_rate * 1000);
+
+    perf.tensor_cores = sm_count * tensor_cores_per_sm;
+    perf.tensor_fp16 = (uint64_t)perf.tensor_cores * fp16_per_tensor_core * core_clock_rate * 1000;
+    perf.tensor_fp32 = (uint64_t)perf.tensor_cores * fp32_per_tensor_core * core_clock_rate * 1000;
+    perf.tensor_fp64 = (uint64_t)perf.tensor_cores * fp64_per_tensor_core * core_clock_rate * 1000;
+
+    perf.memory_bandwidth = 2llu * memory_bus_width / 8 * memory_clock_rate * 1000;
+
+    return perf;
+}
+
+} // unnamed namespace
+
+
 //---------------------
 //--- GetDeviceInfo ---
 //---------------------
@@ -144,148 +323,11 @@ DeviceInfo GetDeviceInfo(int device) {
   params.emplace_back(DeviceInfo::Parameter("globalL1CacheSupported", YesOrNo(props.globalL1CacheSupported)));
   res.specifications.emplace_back(DeviceInfo::ParameterCategory("Caches", std::move(params)));
 
+  // And do not forget about peak performance!
+#if defined(API_CUDA)
+  res.performance = EstimateCudaPerformance(props.major, props.minor, props.multiProcessorCount,
+                                            clockRate, props.memoryBusWidth, memoryClockRate);
+#endif
+
   return res;
-}
-
-//---------------------------------
-//--- GetTheoreticalPerformance ---
-//---------------------------------
-
-enum class NvidiaArchitecture {
-  Unknown,
-  Kepler,    // 2012 (GK)
-  Maxwell,   // 2014 (GM)
-  Pascal,    // 2016 (GP)
-  Volta,     // 2017 (GV)
-  Turing,    // 2018 (TU)
-  Ampere,    // 2020 (GA)
-  Ada,       // 2022 (AD)
-  Hopper,    // 2022 (GH)
-  Blackwell  // 2024 (GB)
-};
-
-TheoreticalPerformance GetCudaPerformance(int major, int minor,
-                                          int sm_count, int core_clock_rate,
-                                          int memory_bus_width, int memory_clock_rate) {
-    TheoreticalPerformance perf;
-
-    // Determine NVIDIA architecture using Compute Capabilities
-    NvidiaArchitecture arch{ NvidiaArchitecture::Unknown };
-    int simt_cores_per_sm{}, tensor_cores_per_sm{};
-    int fp32_per_cycle{};
-    double fp64_fp32_ratio{}, fp16_fp32_ratio{};
-
-    if (major == 3) {
-      arch                = NvidiaArchitecture::Kepler;
-      simt_cores_per_sm   = 192;
-      tensor_cores_per_sm = 0;
-      fp32_per_cycle      = 2;
-      if (minor == 5) {
-        fp64_fp32_ratio   = 1.0 / 3.0;
-      } else {
-        fp64_fp32_ratio   = 1.0 / 24.0;
-      }
-      fp16_fp32_ratio     = 0.0;
-    }
-    else if (major == 5) {
-      arch                = NvidiaArchitecture::Maxwell;
-      simt_cores_per_sm   = 128;
-      tensor_cores_per_sm = 0;
-      fp32_per_cycle      = 2;
-      fp64_fp32_ratio     = 1.0 / 32.0;
-      fp16_fp32_ratio     = 0.0;
-    }
-    else if (major == 6) {
-      arch                = NvidiaArchitecture::Pascal;
-      simt_cores_per_sm   = 128;
-      tensor_cores_per_sm = 0;
-      fp32_per_cycle      = 2;
-      if (minor == 0) {
-        fp64_fp32_ratio   = 0.5;
-      } else {
-        fp64_fp32_ratio   = 1.0 / 32.0;
-      }
-      fp16_fp32_ratio     = 2.0;
-    }
-    else if (major == 7) {
-      if (minor == 0 || minor == 2) {
-        arch              = NvidiaArchitecture::Volta;
-        fp32_per_cycle    = 2;
-        fp64_fp32_ratio   = 0.5;
-        fp16_fp32_ratio   = 2.0;
-      }
-      else {
-        arch = NvidiaArchitecture::Turing;
-        fp32_per_cycle    = 2;
-        fp64_fp32_ratio   = 1.0 / 32.0;
-        fp16_fp32_ratio   = 2.0;
-      }
-      simt_cores_per_sm   = 64;
-      tensor_cores_per_sm = sm_count * 8;
-    }
-    else if (major == 8) {
-      if (minor == 9) {
-        arch = NvidiaArchitecture::Ada;
-        simt_cores_per_sm   = 128;
-        tensor_cores_per_sm = sm_count * 4;
-        fp32_per_cycle      = 2;
-        fp64_fp32_ratio     = 1.0 / 64.0;
-        fp16_fp32_ratio     = 2.0;
-      }
-      else {
-        arch = NvidiaArchitecture::Ampere;
-        if (minor == 0) {
-          simt_cores_per_sm = sm_count * 64;
-        }
-        else {
-          simt_cores_per_sm = sm_count * 128;
-        }
-        tensor_cores_per_sm = 4;
-        fp32_per_cycle      = 2;
-        if (minor == 0) {
-          fp64_fp32_ratio   = 0.5;
-        } else {
-          fp64_fp32_ratio   = 1.0 / 64.0;
-        }
-        fp16_fp32_ratio     = 2.0;
-      }
-    }
-    else if (major == 9) {
-      arch = NvidiaArchitecture::Hopper;
-      simt_cores_per_sm     = 128;
-      tensor_cores_per_sm   = 4;
-      fp32_per_cycle        = 2;
-      fp64_fp32_ratio       = 0.5;
-      fp16_fp32_ratio       = 2.0;
-    }
-    else if (major == 10) {
-      arch = NvidiaArchitecture::Blackwell;
-      simt_cores_per_sm     = 128;
-      tensor_cores_per_sm   = 4;
-      fp32_per_cycle        = 2;
-      fp64_fp32_ratio       = 1.0 / 64.0;
-      fp16_fp32_ratio       = 2.0;
-    }
-    else {
-      arch = NvidiaArchitecture::Unknown;
-      simt_cores_per_sm     = 0;
-      tensor_cores_per_sm   = 0;
-      fp32_per_cycle        = 0;
-      fp64_fp32_ratio       = 0.0;
-      fp16_fp32_ratio       = 0.0;
-    }
-
-    // SIMT
-    perf.simt_cores       = sm_count * simt_cores_per_sm;
-    perf.simt_fp32        = (uint64_t)perf.simt_cores * fp32_per_cycle * core_clock_rate * 1000;
-    perf.simt_fp16        = (uint64_t)(perf.simt_fp32 * fp16_fp32_ratio);
-    perf.simt_fp64        = (uint64_t)(perf.simt_fp32 * fp64_fp32_ratio);
-
-    // Tensor
-    perf.tensor_cores     = sm_count * tensor_cores_per_sm;
-
-    // Bandwidth
-    perf.memory_bandwidth = 2 * (uint64_t)memory_bus_width / 8 * memory_clock_rate * 1000;
-
-    return perf;
 }
