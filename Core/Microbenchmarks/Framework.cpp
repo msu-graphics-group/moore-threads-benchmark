@@ -77,46 +77,78 @@ std::string ApplyUnits(size_t bytes) {
   }
 }
 
+std::string YesOrNo(int value) {
+  assert(value == 0 || value == 1);
+  return value == 0 ? "no" : "yes";
+}
+
 void PrintDeviceInfo(int device, std::ostream &text_stream, std::ostream &csv_stream) {
   int device_count{};
   HANDLE_ERROR(Api::cudaGetDeviceCount(&device_count));
   assert(device <= device_count);
 
+  // Get information about driver and runtime
+  int driverVersion{}, runtimeVersion{};
+  HANDLE_ERROR(Api::cudaDriverGetVersion(&driverVersion));
+  HANDLE_ERROR(Api::cudaRuntimeGetVersion(&runtimeVersion));
+
+  // Get static technical specifications
   Api::cudaDeviceProp props;
   std::memset(&props, 0, sizeof(props));
   HANDLE_ERROR(Api::cudaGetDeviceProperties(&props, device));
 
+  // Retrieve some dynamic properties
+  int clockRate{}, memoryClockRate{};
+  int maxSharedMemoryPerMultiProcessor{};
+  HANDLE_ERROR(Api::cudaDeviceGetAttribute(&clockRate, Api::cudaDevAttrClockRate, device));
+  HANDLE_ERROR(Api::cudaDeviceGetAttribute(&memoryClockRate, Api::cudaDevAttrMemoryClockRate, device));
+  HANDLE_ERROR(Api::cudaDeviceGetAttribute(&maxSharedMemoryPerMultiProcessor, Api::cudaDevAttrMaxSharedMemoryPerMultiProcessor, device));
+#if !defined(API_HIP)
+  int singleToDoublePrecisionPerfRatio{};
+  HANDLE_ERROR(Api::cudaDeviceGetAttribute(&singleToDoublePrecisionPerfRatio, Api::cudaDevAttrSingleToDoublePrecisionPerfRatio, device));
+#endif
+
+  // Now, print the acquired information
   text_stream << props.name << std::endl;
+  text_stream << "   API" << std::endl;
+  text_stream << "      Driver version:                    " << driverVersion << std::endl;
+  text_stream << "      Runtime version:                   " << runtimeVersion << std::endl;
+  text_stream << std::endl;
+
   text_stream << "   Device:" << std::endl;
   text_stream << "      Compute Capability:                " << props.major << '.' << props.minor << std::endl;
-  text_stream << "      multiProcessorCount:               " << props.multiProcessorCount << std::endl;
-  text_stream << "      concurrentKernels:                 " << props.concurrentKernels << std::endl;
 #if defined(API_HIP)
   text_stream << "      gcnArchName:                       " << props.gcnArchName << std::endl;
-  text_stream << "      clockRate:                         " << ApplyUnits(props.clockRate, 1e-3, "MHz") << std::endl;
 #endif
+  text_stream << "      multiProcessorCount:               " << props.multiProcessorCount << std::endl;
+  text_stream << "      clockRate:                         " << ApplyUnits(clockRate, 1e-3, "MHz") << std::endl;
+#if defined(API_HIP)
+  text_stream << "      clockInstructionRate:              " << ApplyUnits(props.clockInstructionRate, 1e-3, "MHz") << std::endl;
+#endif
+  text_stream << "      integrated:                        " << YesOrNo(props.integrated) << std::endl;
+  text_stream << "      concurrentKernels:                 " << YesOrNo(props.concurrentKernels) << std::endl;
   text_stream << std::endl;
+
   text_stream << "   Multiprocessor:" << std::endl;
   text_stream << "      warpSize:                          " << props.warpSize << std::endl;
+#if !defined(API_HIP)
+  text_stream << "      singleToDoublePrecisionPerfRatio:  " << singleToDoublePrecisionPerfRatio << std::endl;
+#endif
   text_stream << "      regsPerMultiprocessor:             " << props.regsPerMultiprocessor << std::endl;
   text_stream << "      maxBlocksPerMultiProcessor:        " << props.maxBlocksPerMultiProcessor << std::endl;
   text_stream << "      sharedMemPerMultiprocessor:        " << ApplyUnits(props.sharedMemPerMultiprocessor) << std::endl;
   text_stream << "      maxThreadsPerMultiProcessor:       " << props.maxThreadsPerMultiProcessor << std::endl;
-#if (API_HIP)
-  text_stream << "      maxSharedMemoryPerMultiProcessor:  " << ApplyUnits(props.maxSharedMemoryPerMultiProcessor) << std::endl;
-#endif
+  text_stream << "      maxSharedMemoryPerMultiProcessor:  " << ApplyUnits(maxSharedMemoryPerMultiProcessor) << std::endl;
   text_stream << std::endl;
 
   text_stream << "   Global memory" << std::endl;
   text_stream << "      totalGlobalMem:                    " << ApplyUnits(props.totalGlobalMem) << std::endl;
+  text_stream << "      memoryClockRate:                   " << ApplyUnits(memoryClockRate, 1e-3, "MHz") << std::endl;
   text_stream << "      memoryBusWidth:                    " << props.memoryBusWidth << std::endl;
-  text_stream << "      ECCEnabled:                        " << props.ECCEnabled << std::endl;
-  text_stream << "      managedMemory:                     " << props.managedMemory << std::endl;
-  text_stream << "      unifiedAddressing:                 " << props.unifiedAddressing << std::endl;
-  text_stream << "      pageableMemoryAccess:              " << props.pageableMemoryAccess << std::endl;
-#if defined(API_HIP)
-  text_stream << "      memoryClockRate:                   " << ApplyUnits(props.memoryClockRate, 1e-3, "MHz") << std::endl;
-#endif
+  text_stream << "      ECCEnabled:                        " << YesOrNo(props.ECCEnabled) << std::endl;
+  text_stream << "      managedMemory:                     " << YesOrNo(props.managedMemory) << std::endl;
+  text_stream << "      unifiedAddressing:                 " << YesOrNo(props.unifiedAddressing) << std::endl;
+  text_stream << "      pageableMemoryAccess:              " << YesOrNo(props.pageableMemoryAccess) << std::endl;
   text_stream << std::endl;
 
   text_stream << "   Grid" << std::endl;
@@ -132,8 +164,8 @@ void PrintDeviceInfo(int device, std::ostream &text_stream, std::ostream &csv_st
   text_stream << "      l2CacheSize:                       " << ApplyUnits(props.l2CacheSize) << std::endl;
   text_stream << "      persistingL2CacheMaxSize:          "
               << ApplyUnits(props.persistingL2CacheMaxSize, 100.0 / props.l2CacheSize, "%") << std::endl;
-  text_stream << "      localL1CacheSupported:             " << props.localL1CacheSupported << std::endl;
-  text_stream << "      globalL1CacheSupported:            " << props.globalL1CacheSupported << std::endl;
+  text_stream << "      localL1CacheSupported:             " << YesOrNo(props.localL1CacheSupported) << std::endl;
+  text_stream << "      globalL1CacheSupported:            " << YesOrNo(props.globalL1CacheSupported) << std::endl;
 
   csv_stream << props.name  << std::endl;
 }
