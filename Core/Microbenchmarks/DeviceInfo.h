@@ -1,9 +1,11 @@
 #pragma once
 #include "Defs.h"
 
+#include "Api/Default.h"
+
 // Estimated peak performance of the selected device
 // Note: these estimates may be inaccurate due to various factors:
-//   - GPU clock boost states
+//   - GPU boosts clocks
 //   - Unaccounted GPU architecture specifics
 //   - Inaccuracies in our performance formulas
 struct TheoreticalPerformance {
@@ -24,7 +26,7 @@ struct TheoreticalPerformance {
 };
 
 struct DeviceInfo {
-  // Represents a device parameter with its technical name and user-friendly display value
+  // Represents a device parameter with its technical name and user-friendly value
   // Example: { "totalGlobalMem", "16.0 GB" }
   using Parameter = std::pair<std::string, std::string>;
 
@@ -35,11 +37,18 @@ struct DeviceInfo {
   // Name of the device as returned by the underlying API
   std::string name;
 
-  TheoreticalPerformance performance;
+  // The original and unmodified properties of the GPU as returned by the underlying API
+  // Exactly the same copy of these properties can be acquired by calling 'Api::cudaGetDeviceProperties()'
+  Api::cudaDeviceProp properties;
+
+  // Estimates for peak performance of the GPU based on its architecture and clock rates
+  // May be empty if we know nothing about this architecture
+  std::optional<TheoreticalPerformance> performance;
 
   // Technical specifications of the device organized by category (e.g., 'Multiprocessor', 'Caches', etc)
-  // Since CUDA, HiP, and MUSA APIs have some differences, some parameters may be missing
-  std::vector<ParameterCategory> specifications;
+  // They combine 'properties' and 'performance', enriching them with some dynamically changing attributes
+  // Since CUDA, HiP, and MUSA APIs have some differences, some parameters may be missing or introduced
+  std::vector<ParameterCategory> parameters;
 };
 
 // Retrieves detailed information about a specific GPU device

@@ -62,13 +62,13 @@ void PrintDeviceInfo(int device, std::ostream &text_stream, std::ostream &csv_st
   text_stream << info.name << std::endl;
 
   size_t max_key_length = 0;
-  for (const auto &category : info.specifications) {
+  for (const auto &category : info.parameters) {
     for (const auto &parameter : category.second) {
       max_key_length = std::max(max_key_length, parameter.first.size());
     }
   }
 
-  for (const auto &category : info.specifications) {
+  for (const auto &category : info.parameters) {
     text_stream << "   " << category.first << std::endl;
     for (const auto &parameter : category.second) {
       std::string padded = parameter.first + ":" + std::string(max_key_length - parameter.first.size(), ' ');

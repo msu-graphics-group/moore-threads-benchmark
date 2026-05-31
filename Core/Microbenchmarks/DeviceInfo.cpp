@@ -1,13 +1,5 @@
 #include "DeviceInfo.h"
 
-#include "Api/Default.h"
-
-#include <cassert>
-#include <cstring>
-#include <iomanip>
-#include <sstream>
-#include <cstdint>
-
 //-------------------------------
 //--- EstimateCudaPerformance ---
 //-------------------------------
@@ -27,9 +19,11 @@ enum class NvidiaArchitecture {
   Blackwell  // 2024 (GB)
 };
 
-TheoreticalPerformance EstimateCudaPerformance(int major, int minor,
-                                               int sm_count, int core_clock_rate,
-                                               int memory_bus_width, int memory_clock_rate) {
+// Implemented by DeepSeek, reviewed by Gemini, Qwen and me
+// These formulas have several flaws, need to verify them with real GPUs
+std::optional<TheoreticalPerformance> EstimateCudaPerformance(int major, int minor,
+                                                              int sm_count, int core_clock_rate,
+                                                              int memory_bus_width, int memory_clock_rate) {
     TheoreticalPerformance perf;
 
     NvidiaArchitecture arch{ NvidiaArchitecture::Unknown };
@@ -41,6 +35,7 @@ TheoreticalPerformance EstimateCudaPerformance(int major, int minor,
     int fp16_per_tensor_core{};
     int fp32_per_tensor_core{};
     int fp64_per_tensor_core{};
+    int data_rate_multiplier{2};
 
     if (major == 3) {
       arch                  = NvidiaArchitecture::Kepler;
@@ -75,6 +70,7 @@ TheoreticalPerformance EstimateCudaPerformance(int major, int minor,
         fp32_per_simt_core  = 2;
         fp16_per_simt_core  = 4;
         fp64_per_simt_core  = 1.0;
+        data_rate_multiplier = 1;
        } 
        else {
         simt_cores_per_sm   = 128;
@@ -89,7 +85,7 @@ TheoreticalPerformance EstimateCudaPerformance(int major, int minor,
 
       if (minor == 0 || minor == 2) {
         arch = NvidiaArchitecture::Volta;
-        fp64_per_simt_core  = 2.0 * 0.5;
+        fp64_per_simt_core  = 1;
       }
       else {
         arch = NvidiaArchitecture::Turing;
@@ -109,11 +105,12 @@ TheoreticalPerformance EstimateCudaPerformance(int major, int minor,
         tensor_cores_per_sm = 4;
 
         fp32_per_simt_core  = 2;
-        fp16_per_simt_core  = 4;
-        fp64_per_simt_core  = 2.0 / 128.0;
+        fp16_per_simt_core  = 2;
+        fp64_per_simt_core  = 2.0 / 64.0;
         fp16_per_tensor_core = 512;
-        fp32_per_tensor_core = 512;
+        fp32_per_tensor_core = 256;
         fp64_per_tensor_core = 0;
+        //data_rate_multiplier = 4;
       }
       else {
         arch                = NvidiaArchitecture::Ampere;
@@ -130,6 +127,7 @@ TheoreticalPerformance EstimateCudaPerformance(int major, int minor,
         fp16_per_tensor_core = 512;
         fp32_per_tensor_core = 512;
         fp64_per_tensor_core = (minor == 0) ? 16 : 0;
+        data_rate_multiplier = (minor == 0) ? 1 : 4;
       }
     }
     else if (major == 9) {
@@ -139,10 +137,11 @@ TheoreticalPerformance EstimateCudaPerformance(int major, int minor,
 
       fp32_per_simt_core    = 2;
       fp16_per_simt_core    = 4;
-      fp64_per_simt_core    = 2.0 * 0.5;
+      fp64_per_simt_core    = 1;
       fp16_per_tensor_core  = 512;
       fp32_per_tensor_core  = 512;
-      fp64_per_tensor_core  = 16;
+      fp64_per_tensor_core  = 32;
+      data_rate_multiplier  = 1;
     }
     else if (major == 10) {
       arch                  = NvidiaArchitecture::Blackwell;
@@ -151,10 +150,11 @@ TheoreticalPerformance EstimateCudaPerformance(int major, int minor,
 
       fp32_per_simt_core    = 2;
       fp16_per_simt_core    = 4;
-      fp64_per_simt_core    = 2.0 / 64.0;
-      fp16_per_tensor_core  = 512;
-      fp32_per_tensor_core  = 512;
-      fp64_per_tensor_core  = 16;
+      fp64_per_simt_core    = 2.0 / 128.0;
+      fp16_per_tensor_core  = 1024;
+      fp32_per_tensor_core  = 1024;
+      fp64_per_tensor_core  = 0;
+      data_rate_multiplier  = (minor == 0) ? 1 : 3;
     }
     else {
       arch                  = NvidiaArchitecture::Unknown;
@@ -179,9 +179,9 @@ TheoreticalPerformance EstimateCudaPerformance(int major, int minor,
     perf.tensor_fp32 = (uint64_t)perf.tensor_cores * fp32_per_tensor_core * core_clock_rate * 1000;
     perf.tensor_fp64 = (uint64_t)perf.tensor_cores * fp64_per_tensor_core * core_clock_rate * 1000;
 
-    perf.memory_bandwidth = 2llu * memory_bus_width / 8 * memory_clock_rate * 1000;
-
-    return perf;
+    perf.memory_bandwidth = (uint64_t)data_rate_multiplier * memory_bus_width / 8 * memory_clock_rate * 1000;
+    
+    return arch == NvidiaArchitecture::Unknown ? std::optional<TheoreticalPerformance>() : perf;
 }
 
 } // unnamed namespace
@@ -201,7 +201,7 @@ std::string ApplyUnits(size_t value, double multiplier, const std::string &units
 }
 
 // Special version for memory sizes
-std::string ApplyUnits(size_t bytes) {
+std::string ApplyBytes(size_t bytes) {
   constexpr size_t GB = 1024 * 1024 * 1024;
   constexpr size_t MB = 1024 * 1024;
   constexpr size_t KB = 1024;
@@ -217,6 +217,34 @@ std::string ApplyUnits(size_t bytes) {
   }
 }
 
+// Special version for MHz
+std::string ApplyMHz(size_t khz) {
+  return ApplyUnits(khz, 1e-3, "MHz");
+}
+
+// Special version for floating-point operations per second
+std::string ApplyFlops(uint64_t flops) {
+
+  if (flops >= 1e12) {
+    return ApplyUnits(flops, 1.0 * 1e-12, "TFlops");
+  }
+  else if (flops >= 1e9) {
+    return ApplyUnits(flops, 1.0 * 1e-9, "GFlops");
+  }
+  else if (flops >= 1e6) {
+    return ApplyUnits(flops, 1.0 * 1e-6, "MFlops");
+  }
+  else if (flops >= 1e3) {
+    return ApplyUnits(flops, 1.0 * 1e-3, "KFlops");
+  }
+  else if (flops > 0) {
+    return ApplyUnits(flops, 1.0, "Flops");
+  }
+  else {
+    return "N/A";
+  }
+}
+
 // Returns 'yes' and 'no' instead of '1' and '0'
 std::string YesOrNo(int value) {
   assert(value == 0 || value == 1);
@@ -227,19 +255,22 @@ std::string YesOrNo(int value) {
 
 
 DeviceInfo GetDeviceInfo(int device) {
+  DeviceInfo res;
+
   int device_count{};
   HANDLE_ERROR(Api::cudaGetDeviceCount(&device_count));
-  assert(device <= device_count);
+  assert(device < device_count);
 
   // Get information about driver and runtime
   int driverVersion{}, runtimeVersion{};
   HANDLE_ERROR(Api::cudaDriverGetVersion(&driverVersion));
   HANDLE_ERROR(Api::cudaRuntimeGetVersion(&runtimeVersion));
 
-  // Get static technical specifications
-  Api::cudaDeviceProp props;
-  std::memset(&props, 0, sizeof(props));
-  HANDLE_ERROR(Api::cudaGetDeviceProperties(&props, device));
+  // Get static technical properties
+  std::memset(&res.properties, 0, sizeof(res.properties));
+  HANDLE_ERROR(Api::cudaGetDeviceProperties(&res.properties, device));
+  const auto &props = res.properties;
+  res.name = props.name;
 
   // Retrieve some dynamic attributes
   int clockRate{}, memoryClockRate{};
@@ -252,15 +283,14 @@ DeviceInfo GetDeviceInfo(int device) {
   HANDLE_ERROR(Api::cudaDeviceGetAttribute(&singleToDoublePrecisionPerfRatio, Api::cudaDevAttrSingleToDoublePrecisionPerfRatio, device));
 #endif
 
-  // Wrap all values as 'DeviceInfo'
+  // Wrap all properties as parameters
   std::vector<DeviceInfo::Parameter> params;
-  DeviceInfo res { .name = props.name };
 
   // API
   params = {};
   params.emplace_back(DeviceInfo::Parameter("Driver version", std::to_string(driverVersion)));
   params.emplace_back(DeviceInfo::Parameter("Runtime version", std::to_string(runtimeVersion)));
-  res.specifications.emplace_back(DeviceInfo::ParameterCategory("API", std::move(params)));
+  res.parameters.emplace_back(DeviceInfo::ParameterCategory("API", std::move(params)));
 
   // Device
   params = {};
@@ -276,7 +306,7 @@ DeviceInfo GetDeviceInfo(int device) {
 #endif
   params.emplace_back(DeviceInfo::Parameter("integrated", YesOrNo(props.integrated)));
   params.emplace_back(DeviceInfo::Parameter("concurrentKernels", YesOrNo(props.concurrentKernels)));
-  res.specifications.emplace_back(DeviceInfo::ParameterCategory("Device", std::move(params)));
+  res.parameters.emplace_back(DeviceInfo::ParameterCategory("Device", std::move(params)));
 
   // Multiprocessor
   params = {};
@@ -286,21 +316,21 @@ DeviceInfo GetDeviceInfo(int device) {
 #endif
   params.emplace_back(DeviceInfo::Parameter("regsPerMultiprocessor", std::to_string(props.regsPerMultiprocessor)));
   params.emplace_back(DeviceInfo::Parameter("maxBlocksPerMultiProcessor", std::to_string(props.maxBlocksPerMultiProcessor)));
-  params.emplace_back(DeviceInfo::Parameter("sharedMemPerMultiprocessor", ApplyUnits(props.sharedMemPerMultiprocessor)));
+  params.emplace_back(DeviceInfo::Parameter("sharedMemPerMultiprocessor", ApplyBytes(props.sharedMemPerMultiprocessor)));
   params.emplace_back(DeviceInfo::Parameter("maxThreadsPerMultiProcessor", std::to_string(props.maxThreadsPerMultiProcessor)));
-  params.emplace_back(DeviceInfo::Parameter("maxSharedMemoryPerMultiProcessor", ApplyUnits(maxSharedMemoryPerMultiProcessor)));
-  res.specifications.emplace_back(DeviceInfo::ParameterCategory("Multiprocessor", std::move(params)));
+  params.emplace_back(DeviceInfo::Parameter("maxSharedMemoryPerMultiProcessor", ApplyBytes(maxSharedMemoryPerMultiProcessor)));
+  res.parameters.emplace_back(DeviceInfo::ParameterCategory("Multiprocessor", std::move(params)));
 
   // Global memory
   params = {};
-  params.emplace_back(DeviceInfo::Parameter("totalGlobalMem", ApplyUnits(props.totalGlobalMem)));
+  params.emplace_back(DeviceInfo::Parameter("totalGlobalMem", ApplyBytes(props.totalGlobalMem)));
   params.emplace_back(DeviceInfo::Parameter("memoryClockRate", ApplyUnits(memoryClockRate, 1e-3, "MHz")));
   params.emplace_back(DeviceInfo::Parameter("memoryBusWidth", std::to_string(props.memoryBusWidth)));
   params.emplace_back(DeviceInfo::Parameter("ECCEnabled", YesOrNo(props.ECCEnabled)));
   params.emplace_back(DeviceInfo::Parameter("managedMemory", YesOrNo(props.managedMemory)));
   params.emplace_back(DeviceInfo::Parameter("unifiedAddressing", YesOrNo(props.unifiedAddressing)));
   params.emplace_back(DeviceInfo::Parameter("pageableMemoryAccess", YesOrNo(props.pageableMemoryAccess)));
-  res.specifications.emplace_back(DeviceInfo::ParameterCategory("Global memory", std::move(params)));
+  res.parameters.emplace_back(DeviceInfo::ParameterCategory("Global memory", std::move(params)));
 
   // Grid
   params = {};
@@ -308,26 +338,40 @@ DeviceInfo GetDeviceInfo(int device) {
       std::to_string(props.maxGridSize[0]) + " x " +
       std::to_string(props.maxGridSize[1]) + " x " +
       std::to_string(props.maxGridSize[2])));
-  params.emplace_back(DeviceInfo::Parameter("sharedMemPerBlock", ApplyUnits(props.sharedMemPerBlock)));
+  params.emplace_back(DeviceInfo::Parameter("sharedMemPerBlock", ApplyBytes(props.sharedMemPerBlock)));
   params.emplace_back(DeviceInfo::Parameter("regsPerBlock", std::to_string(props.regsPerBlock)));
   params.emplace_back(DeviceInfo::Parameter("maxThreadsPerBlock", std::to_string(props.maxThreadsPerBlock)));
-  res.specifications.emplace_back(DeviceInfo::ParameterCategory("Grid", std::move(params)));
+  res.parameters.emplace_back(DeviceInfo::ParameterCategory("Grid", std::move(params)));
 
   // Caches
   params = {};
-  params.emplace_back(DeviceInfo::Parameter("totalConstMem", ApplyUnits(props.totalConstMem)));
-  params.emplace_back(DeviceInfo::Parameter("l2CacheSize", ApplyUnits(props.l2CacheSize)));
+  params.emplace_back(DeviceInfo::Parameter("totalConstMem", ApplyBytes(props.totalConstMem)));
+  params.emplace_back(DeviceInfo::Parameter("l2CacheSize", ApplyBytes(props.l2CacheSize)));
   params.emplace_back(DeviceInfo::Parameter("persistingL2CacheMaxSize",
       ApplyUnits(props.persistingL2CacheMaxSize, 100.0 / props.l2CacheSize, "%")));
   params.emplace_back(DeviceInfo::Parameter("localL1CacheSupported", YesOrNo(props.localL1CacheSupported)));
   params.emplace_back(DeviceInfo::Parameter("globalL1CacheSupported", YesOrNo(props.globalL1CacheSupported)));
-  res.specifications.emplace_back(DeviceInfo::ParameterCategory("Caches", std::move(params)));
+  res.parameters.emplace_back(DeviceInfo::ParameterCategory("Caches", std::move(params)));
 
-  // And do not forget about peak performance!
+  // Now, we need to estimate the theoretical performance
 #if defined(API_CUDA)
   res.performance = EstimateCudaPerformance(props.major, props.minor, props.multiProcessorCount,
                                             clockRate, props.memoryBusWidth, memoryClockRate);
 #endif
+
+  // Add estimates to parameters
+  if (res.performance) {
+    const auto &perf = res.performance.value();
+    params = {};
+    params.emplace_back(DeviceInfo::Parameter("SIMT (fp16)",   ApplyFlops(perf.simt_fp16)));
+    params.emplace_back(DeviceInfo::Parameter("SIMT (fp32)",   ApplyFlops(perf.simt_fp32)));
+    params.emplace_back(DeviceInfo::Parameter("SIMT (fp64)",   ApplyFlops(perf.simt_fp64)));
+    params.emplace_back(DeviceInfo::Parameter("Tensor (fp16)", ApplyFlops(perf.tensor_fp16)));
+    params.emplace_back(DeviceInfo::Parameter("Tensor (fp32)", ApplyFlops(perf.tensor_fp32)));
+    params.emplace_back(DeviceInfo::Parameter("Tensor (fp64)", ApplyFlops(perf.tensor_fp64)));
+    params.emplace_back(DeviceInfo::Parameter("Bandwidth",     ApplyUnits(perf.memory_bandwidth, 1e-9, "GB/s")));
+    res.parameters.emplace_back(DeviceInfo::ParameterCategory("Performance", std::move(params)));
+  }
 
   return res;
 }
