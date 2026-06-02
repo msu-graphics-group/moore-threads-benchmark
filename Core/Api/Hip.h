@@ -11,10 +11,20 @@ struct Hip {
   using cudaError_t    = hipError_t;
   using cudaEvent_t    = hipEvent_t;
   using cudaDeviceProp = hipDeviceProp_t;
+  using cudaDeviceAttr = hipDeviceAttribute_t;
   using cudaMemcpyKind = hipMemcpyKind;
   using cudaStream_t   = hipStream_t;
 
   static constexpr cudaError_t cudaSuccess = ::hipSuccess;
+
+  static constexpr cudaDeviceAttr cudaDevAttrClockRate                         = hipDeviceAttributeClockRate;
+  static constexpr cudaDeviceAttr cudaDevAttrMemoryClockRate                   = hipDeviceAttributeMemoryClockRate;
+  static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = hipDeviceAttributeSingleToDoublePrecisionPerfRatio;
+  static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = hipDeviceAttributeMaxSharedMemoryPerMultiprocessor;
+
+  //--------------
+  //--- Errors ---
+  //--------------
 
   static cudaError_t cudaGetLastError() {
     return ::hipGetLastError();
@@ -22,6 +32,18 @@ struct Hip {
 
   static const char *cudaGetErrorString(cudaError_t error) {
     return ::hipGetErrorString(error);
+  }
+
+  //---------------
+  //--- Devices ---
+  //---------------
+
+  static cudaError_t cudaDriverGetVersion(int *version) {
+    return ::hipDriverGetVersion(version);
+  }
+  
+  static cudaError_t cudaRuntimeGetVersion(int *version) {
+    return ::hipRuntimeGetVersion(version);
   }
 
   static cudaError_t cudaGetDeviceCount(int *count) {
@@ -35,6 +57,18 @@ struct Hip {
   static cudaError_t cudaGetDeviceProperties(cudaDeviceProp *prop, int device) {
     return ::hipGetDeviceProperties(prop, device);
   }
+
+  static cudaError_t cudaDeviceGetAttribute(int *value, cudaDeviceAttr attr, int device) {
+    return ::hipDeviceGetAttribute(value, attr, device);
+  }
+
+  static cudaError_t cudaDeviceSynchronize() {
+    return ::hipDeviceSynchronize();
+  }
+
+  //--------------
+  //--- Memory ---
+  //--------------
 
   template<class T>
   static cudaError_t cudaMalloc(T **devPtr, size_t size) {
@@ -54,6 +88,10 @@ struct Hip {
   static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
     return ::hipEventRecord(event, stream);
   }
+  
+  //--------------
+  //--- Events ---
+  //--------------
 
   static cudaError_t cudaEventCreate(cudaEvent_t *event) {
     return ::hipEventCreate(event);
@@ -69,9 +107,5 @@ struct Hip {
 
   static cudaError_t cudaEventSynchronize(cudaEvent_t event) {
     return ::hipEventSynchronize(event);
-  }
-
-  static cudaError_t cudaDeviceSynchronize() {
-    return ::hipDeviceSynchronize();
   }
 };

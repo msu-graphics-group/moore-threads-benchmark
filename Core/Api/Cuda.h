@@ -13,10 +13,20 @@ struct Cuda {
   using cudaError_t    = ::cudaError_t;
   using cudaEvent_t    = ::cudaEvent_t;
   using cudaDeviceProp = ::cudaDeviceProp;
+  using cudaDeviceAttr = ::cudaDeviceAttr;
   using cudaMemcpyKind = ::cudaMemcpyKind;
   using cudaStream_t   = ::cudaStream_t;
 
   static constexpr cudaError_t cudaSuccess = ::cudaSuccess;
+
+  static constexpr cudaDeviceAttr cudaDevAttrClockRate                         = ::cudaDevAttrClockRate;
+  static constexpr cudaDeviceAttr cudaDevAttrMemoryClockRate                   = ::cudaDevAttrMemoryClockRate;
+  static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = ::cudaDevAttrSingleToDoublePrecisionPerfRatio;
+  static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = ::cudaDevAttrMaxSharedMemoryPerMultiprocessor;
+
+  //--------------
+  //--- Errors ---
+  //--------------
 
   static cudaError_t cudaGetLastError() {
     return ::cudaGetLastError();
@@ -24,6 +34,18 @@ struct Cuda {
 
   static const char *cudaGetErrorString(cudaError_t error) {
     return ::cudaGetErrorString(error);
+  }
+
+  //---------------
+  //--- Devices ---
+  //---------------
+
+  static cudaError_t cudaDriverGetVersion(int *version) {
+    return ::cudaDriverGetVersion(version);
+  }
+  
+  static cudaError_t cudaRuntimeGetVersion(int *version) {
+    return ::cudaRuntimeGetVersion(version);
   }
 
   static cudaError_t cudaGetDeviceCount(int *count) {
@@ -37,6 +59,18 @@ struct Cuda {
   static cudaError_t cudaGetDeviceProperties(cudaDeviceProp *prop, int device) {
     return ::cudaGetDeviceProperties(prop, device);
   }
+
+  static cudaError_t cudaDeviceGetAttribute(int *value, cudaDeviceAttr attr, int device) {
+    return ::cudaDeviceGetAttribute(value, attr, device);
+  }
+
+  static cudaError_t cudaDeviceSynchronize() {
+    return ::cudaDeviceSynchronize();
+  }
+
+  //--------------
+  //--- Memory ---
+  //--------------
 
   template<class T>
   static cudaError_t cudaMalloc(T **devPtr, size_t size) {
@@ -57,6 +91,10 @@ struct Cuda {
     return ::cudaEventRecord(event, stream);
   }
 
+  //--------------
+  //--- Events ---
+  //--------------
+
   static cudaError_t cudaEventCreate(cudaEvent_t *event) {
     return ::cudaEventCreate(event);
   }
@@ -71,9 +109,5 @@ struct Cuda {
 
   static cudaError_t cudaEventSynchronize(cudaEvent_t event) {
     return ::cudaEventSynchronize(event);
-  }
-
-  static cudaError_t cudaDeviceSynchronize() {
-    return ::cudaDeviceSynchronize();
   }
 };

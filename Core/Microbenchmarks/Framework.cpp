@@ -1,6 +1,9 @@
 #include "Framework.h"
 
 #include "Api/Default.h"
+#include "DeviceInfo.h"
+
+#include <string>
 
 namespace {
 
@@ -53,89 +56,26 @@ Results Average(std::vector<double> values, size_t n_warmup, size_t n_outliers) 
   return results;
 }
 
-// Formats some value to a human-readable format with units (e.g., '42.0 MB')
-std::string ApplyUnits(size_t value, double multiplier, const std::string &units) {
-  std::ostringstream oss;
-  oss << std::fixed << std::setprecision(2) << value * multiplier << ' ' << units;
-  return oss.str();
-}
-
-// Special version for memory sizes
-std::string ApplyUnits(size_t bytes) {
-  constexpr size_t GB = 1024 * 1024 * 1024;
-  constexpr size_t MB = 1024 * 1024;
-  constexpr size_t KB = 1024;
-
-  if (bytes >= GB) {
-    return ApplyUnits(bytes, 1.0 / GB, "GB");
-  } else if (bytes >= MB) {
-    return ApplyUnits(bytes, 1.0 / MB, "MB");
-  } else if (bytes >= KB) {
-    return ApplyUnits(bytes, 1.0 / KB, "KB");
-  } else {
-    return ApplyUnits(bytes, 1.0, "Bytes");
-  }
-}
-
 void PrintDeviceInfo(int device, std::ostream &text_stream, std::ostream &csv_stream) {
-  int device_count{};
-  HANDLE_ERROR(Api::cudaGetDeviceCount(&device_count));
-  assert(device <= device_count);
+  auto info = GetDeviceInfo(device);
 
-  Api::cudaDeviceProp props;
-  std::memset(&props, 0, sizeof(props));
-  HANDLE_ERROR(Api::cudaGetDeviceProperties(&props, device));
+  text_stream << info.name << std::endl;
 
-  text_stream << props.name << std::endl;
-  text_stream << "   Device:" << std::endl;
-  text_stream << "      Compute Capability:                " << props.major << '.' << props.minor << std::endl;
-  text_stream << "      multiProcessorCount:               " << props.multiProcessorCount << std::endl;
-  text_stream << "      concurrentKernels:                 " << props.concurrentKernels << std::endl;
-#if defined(API_HIP)
-  text_stream << "      gcnArchName:                       " << props.gcnArchName << std::endl;
-  text_stream << "      clockRate:                         " << ApplyUnits(props.clockRate, 1e-3, "MHz") << std::endl;
-#endif
-  text_stream << std::endl;
-  text_stream << "   Multiprocessor:" << std::endl;
-  text_stream << "      warpSize:                          " << props.warpSize << std::endl;
-  text_stream << "      regsPerMultiprocessor:             " << props.regsPerMultiprocessor << std::endl;
-  text_stream << "      maxBlocksPerMultiProcessor:        " << props.maxBlocksPerMultiProcessor << std::endl;
-  text_stream << "      sharedMemPerMultiprocessor:        " << ApplyUnits(props.sharedMemPerMultiprocessor) << std::endl;
-  text_stream << "      maxThreadsPerMultiProcessor:       " << props.maxThreadsPerMultiProcessor << std::endl;
-#if (API_HIP)
-  text_stream << "      maxSharedMemoryPerMultiProcessor:  " << ApplyUnits(props.maxSharedMemoryPerMultiProcessor) << std::endl;
-#endif
-  text_stream << std::endl;
+  size_t max_key_length = 0;
+  for (const auto &category : info.parameters) {
+    for (const auto &parameter : category.second) {
+      max_key_length = std::max(max_key_length, parameter.first.size());
+    }
+  }
 
-  text_stream << "   Global memory" << std::endl;
-  text_stream << "      totalGlobalMem:                    " << ApplyUnits(props.totalGlobalMem) << std::endl;
-  text_stream << "      memoryBusWidth:                    " << props.memoryBusWidth << std::endl;
-  text_stream << "      ECCEnabled:                        " << props.ECCEnabled << std::endl;
-  text_stream << "      managedMemory:                     " << props.managedMemory << std::endl;
-  text_stream << "      unifiedAddressing:                 " << props.unifiedAddressing << std::endl;
-  text_stream << "      pageableMemoryAccess:              " << props.pageableMemoryAccess << std::endl;
-#if defined(API_HIP)
-  text_stream << "      memoryClockRate:                   " << ApplyUnits(props.memoryClockRate, 1e-3, "MHz") << std::endl;
-#endif
-  text_stream << std::endl;
-
-  text_stream << "   Grid" << std::endl;
-  text_stream << "      maxGridSize:                       " << props.maxGridSize[0] << " x "
-              << props.maxGridSize[1] << " x " << props.maxGridSize[2] << std::endl;
-  text_stream << "      sharedMemPerBlock:                 " << ApplyUnits(props.sharedMemPerBlock) << std::endl;
-  text_stream << "      regsPerBlock:                      " << props.regsPerBlock << std::endl;
-  text_stream << "      maxThreadsPerBlock:                " << props.maxThreadsPerBlock << std::endl;
-  text_stream << std::endl;
-
-  text_stream << "   Caches" << std::endl;
-  text_stream << "      totalConstMem:                     " << ApplyUnits(props.totalConstMem) << std::endl;
-  text_stream << "      l2CacheSize:                       " << ApplyUnits(props.l2CacheSize) << std::endl;
-  text_stream << "      persistingL2CacheMaxSize:          "
-              << ApplyUnits(props.persistingL2CacheMaxSize, 100.0 / props.l2CacheSize, "%") << std::endl;
-  text_stream << "      localL1CacheSupported:             " << props.localL1CacheSupported << std::endl;
-  text_stream << "      globalL1CacheSupported:            " << props.globalL1CacheSupported << std::endl;
-
-  csv_stream << props.name  << std::endl;
+  for (const auto &category : info.parameters) {
+    text_stream << "   " << category.first << std::endl;
+    for (const auto &parameter : category.second) {
+      std::string padded = parameter.first + ":" + std::string(max_key_length - parameter.first.size(), ' ');
+      text_stream << "      " << padded << " " << parameter.second << std::endl;
+    }
+    text_stream << std::endl;
+  }
 }
 
 } // unnamed namespace
