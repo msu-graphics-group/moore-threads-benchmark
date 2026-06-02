@@ -204,7 +204,7 @@ std::optional<TheoreticalPerformance> EstimateMusaPerformance(const Api::cudaDev
   if (props.major == 1 && props.minor == 0) {
     arch = MooreThreadsArchitecture::Sudi;
   }
-  else if (props.major != 2 || props.minor != 1) {
+  else if (props.major == 2 && props.minor == 1) {
     arch = MooreThreadsArchitecture::Chunxiao;
     tensor_cores_per_mp = 4;
     fp64_per_simt_core = 1.0 / 64;
@@ -219,7 +219,7 @@ std::optional<TheoreticalPerformance> EstimateMusaPerformance(const Api::cudaDev
   perf.tensor_fp16  = perf.tensor_cores * 256 * core_clock_rate * 1000;
   perf.tensor_fp32  = 0;
   perf.tensor_fp64  = 0;
-  perf.memory_bandwidth = 2 * props.memoryBusWidth / 8 * memory_clock_rate * 1000;
+  perf.memory_bandwidth = (uint64_t)2 * props.memoryBusWidth / 8 * memory_clock_rate * 1000;
 
   return arch == MooreThreadsArchitecture::Unknown ? std::optional<TheoreticalPerformance>() : perf;
 }

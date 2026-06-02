@@ -11,16 +11,16 @@ struct Musa {
   using cudaError_t    = musaError_t;
   using cudaEvent_t    = musaEvent_t;
   using cudaDeviceProp = musaDeviceProp;
-  using cudaDeviceAttr = musaDeviceAttribute_t;
+  using cudaDeviceAttr = musaDeviceAttr;
   using cudaMemcpyKind = musaMemcpyKind;
   using cudaStream_t   = musaStream_t;
 
   static constexpr cudaError_t cudaSuccess = musaSuccess;
 
-  static constexpr cudaDeviceAttr cudaDevAttrClockRate                         = musaDeviceAttributeClockRate;
-  static constexpr cudaDeviceAttr cudaDevAttrMemoryClockRate                   = musaDeviceAttributeMemoryClockRate;
-  static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = musaDeviceAttributeSingleToDoublePrecisionPerfRatio;
-  static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = musaDeviceAttributeMaxSharedMemoryPerMultiprocessor;
+  static constexpr cudaDeviceAttr cudaDevAttrClockRate                         = musaDevAttrClockRate;
+  static constexpr cudaDeviceAttr cudaDevAttrMemoryClockRate                   = musaDevAttrMemoryClockRate;
+  static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = musaDevAttrSingleToDoublePrecisionPerfRatio;
+  static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = musaDevAttrMaxSharedMemoryPerMultiprocessor;
 
   //--------------
   //--- Errors ---
