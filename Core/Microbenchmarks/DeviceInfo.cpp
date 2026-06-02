@@ -21,9 +21,8 @@ enum class NvidiaArchitecture {
 
 // Implemented by DeepSeek, reviewed by Gemini, Qwen and me
 // These formulas have several flaws, need to verify them with real GPUs
-std::optional<TheoreticalPerformance> EstimateCudaPerformance(int major, int minor,
-                                                              int sm_count, int core_clock_rate,
-                                                              int memory_bus_width, int memory_clock_rate) {
+std::optional<TheoreticalPerformance> EstimateCudaPerformance(const Api::cudaDeviceProp &props,
+                                                              int core_clock_rate, int memory_clock_rate) {
     TheoreticalPerformance perf;
 
     NvidiaArchitecture arch{ NvidiaArchitecture::Unknown };
@@ -37,19 +36,19 @@ std::optional<TheoreticalPerformance> EstimateCudaPerformance(int major, int min
     int fp64_per_tensor_core{};
     int data_rate_multiplier{2};
 
-    if (major == 3) {
+    if (props.major == 3) {
       arch                  = NvidiaArchitecture::Kepler;
       simt_cores_per_sm     = 192;
       tensor_cores_per_sm   = 0;
 
       fp32_per_simt_core    = 2;
       fp16_per_simt_core    = 0;
-      fp64_per_simt_core    = (minor == 5) ? (2.0 / 3.0) : (2.0 / 24.0);
+      fp64_per_simt_core    = (props.minor == 5) ? (2.0 / 3.0) : (2.0 / 24.0);
       fp16_per_tensor_core  = 0;
       fp32_per_tensor_core  = 0;
       fp64_per_tensor_core  = 0;
     }
-    else if (major == 5) {
+    else if (props.major == 5) {
       arch                  = NvidiaArchitecture::Maxwell;
       simt_cores_per_sm     = 128;
       tensor_cores_per_sm   = 0;
@@ -61,11 +60,11 @@ std::optional<TheoreticalPerformance> EstimateCudaPerformance(int major, int min
       fp32_per_tensor_core  = 0;
       fp64_per_tensor_core  = 0;
     }
-    else if (major == 6) {
+    else if (props.major == 6) {
       arch                  = NvidiaArchitecture::Pascal;
       tensor_cores_per_sm   = 0;
 
-      if (minor == 0) {
+      if (props.minor == 0) {
         simt_cores_per_sm   = 64;
         fp32_per_simt_core  = 2;
         fp16_per_simt_core  = 4;
@@ -79,11 +78,11 @@ std::optional<TheoreticalPerformance> EstimateCudaPerformance(int major, int min
         fp64_per_simt_core  = 2 / 32.0;
       }
     }
-    else if (major == 7) {
+    else if (props.major == 7) {
       fp32_per_simt_core    = 2;
       fp16_per_simt_core    = 4;
 
-      if (minor == 0 || minor == 2) {
+      if (props.minor == 0 || props.minor == 2) {
         arch = NvidiaArchitecture::Volta;
         fp64_per_simt_core  = 1;
       }
@@ -98,8 +97,8 @@ std::optional<TheoreticalPerformance> EstimateCudaPerformance(int major, int min
       fp32_per_tensor_core  = 0;
       fp64_per_tensor_core  = 0;
     }
-    else if (major == 8) {
-      if (minor == 9) {
+    else if (props.major == 8) {
+      if (props.minor == 9) {
         arch                = NvidiaArchitecture::Ada;
         simt_cores_per_sm   = 128;
         tensor_cores_per_sm = 4;
@@ -110,11 +109,11 @@ std::optional<TheoreticalPerformance> EstimateCudaPerformance(int major, int min
         fp16_per_tensor_core = 512;
         fp32_per_tensor_core = 256;
         fp64_per_tensor_core = 0;
-        //data_rate_multiplier = 4;
+        //data_rate_multiplier = 4;  // Need to differ GDDR6 from GDDR6X by GPU name
       }
       else {
         arch                = NvidiaArchitecture::Ampere;
-        if (minor == 0) {
+        if (props.minor == 0) {
           simt_cores_per_sm = 64;
         } else {
           simt_cores_per_sm = 128;
@@ -123,14 +122,14 @@ std::optional<TheoreticalPerformance> EstimateCudaPerformance(int major, int min
 
         fp32_per_simt_core  = 2;
         fp16_per_simt_core  = 4;
-        fp64_per_simt_core  = (minor == 0) ? (2.0 * 0.5) : (2.0 / 64.0);
+        fp64_per_simt_core  = (props.minor == 0) ? (2.0 * 0.5) : (2.0 / 64.0);
         fp16_per_tensor_core = 512;
         fp32_per_tensor_core = 512;
-        fp64_per_tensor_core = (minor == 0) ? 16 : 0;
-        data_rate_multiplier = (minor == 0) ? 1 : 4;
+        fp64_per_tensor_core = (props.minor == 0) ? 16 : 0;
+        data_rate_multiplier = (props.minor == 0) ? 1 : 4;
       }
     }
-    else if (major == 9) {
+    else if (props.major == 9) {
       arch                  = NvidiaArchitecture::Hopper;
       simt_cores_per_sm     = 128;
       tensor_cores_per_sm   = 4;
@@ -143,7 +142,7 @@ std::optional<TheoreticalPerformance> EstimateCudaPerformance(int major, int min
       fp64_per_tensor_core  = 32;
       data_rate_multiplier  = 1;
     }
-    else if (major == 10) {
+    else if (props.major == 10) {
       arch                  = NvidiaArchitecture::Blackwell;
       simt_cores_per_sm     = 128;
       tensor_cores_per_sm   = 4;
@@ -154,7 +153,7 @@ std::optional<TheoreticalPerformance> EstimateCudaPerformance(int major, int min
       fp16_per_tensor_core  = 1024;
       fp32_per_tensor_core  = 1024;
       fp64_per_tensor_core  = 0;
-      data_rate_multiplier  = (minor == 0) ? 1 : 3;
+      data_rate_multiplier  = (props.minor == 0) ? 1 : 3;
     }
     else {
       arch                  = NvidiaArchitecture::Unknown;
@@ -169,22 +168,61 @@ std::optional<TheoreticalPerformance> EstimateCudaPerformance(int major, int min
       fp64_per_tensor_core  = 0;
     }
 
-    perf.simt_cores = sm_count * simt_cores_per_sm;
+    perf.simt_cores = props.multiProcessorCount * simt_cores_per_sm;
     perf.simt_fp32 = (uint64_t)perf.simt_cores * fp32_per_simt_core * core_clock_rate * 1000;
     perf.simt_fp16 = (uint64_t)perf.simt_cores * fp16_per_simt_core * core_clock_rate * 1000;
     perf.simt_fp64 = (uint64_t)(perf.simt_cores * fp64_per_simt_core * core_clock_rate * 1000);
 
-    perf.tensor_cores = sm_count * tensor_cores_per_sm;
+    perf.tensor_cores = props.multiProcessorCount * tensor_cores_per_sm;
     perf.tensor_fp16 = (uint64_t)perf.tensor_cores * fp16_per_tensor_core * core_clock_rate * 1000;
     perf.tensor_fp32 = (uint64_t)perf.tensor_cores * fp32_per_tensor_core * core_clock_rate * 1000;
     perf.tensor_fp64 = (uint64_t)perf.tensor_cores * fp64_per_tensor_core * core_clock_rate * 1000;
 
-    perf.memory_bandwidth = (uint64_t)data_rate_multiplier * memory_bus_width / 8 * memory_clock_rate * 1000;
+    perf.memory_bandwidth = (uint64_t)data_rate_multiplier * props.memoryBusWidth / 8 * memory_clock_rate * 1000;
     
     return arch == NvidiaArchitecture::Unknown ? std::optional<TheoreticalPerformance>() : perf;
 }
 
 } // unnamed namespace
+
+
+//-------------------------------
+//--- EstimateMusaPerformance ---
+//-------------------------------
+
+enum class MooreThreadsArchitecture {
+  Unknown,
+  Sudi,
+  Chunxiao
+};
+
+std::optional<TheoreticalPerformance> EstimateMusaPerformance(const Api::cudaDeviceProp &props,
+                                                              int core_clock_rate, int memory_clock_rate) {
+  MooreThreadsArchitecture arch{ MooreThreadsArchitecture::Unknown };
+  int tensor_cores_per_mp{};
+  double fp64_per_simt_core{};
+  if (props.major == 1 && props.minor == 0) {
+    arch = MooreThreadsArchitecture::Sudi;
+  }
+  else if (props.major != 2 || props.minor != 1) {
+    arch = MooreThreadsArchitecture::Chunxiao;
+    tensor_cores_per_mp = 4;
+    fp64_per_simt_core = 1.0 / 64;
+  }
+
+  TheoreticalPerformance perf;
+  perf.simt_cores   = props.multiProcessorCount * 128;
+  perf.tensor_cores = props.multiProcessorCount * tensor_cores_per_mp;
+  perf.simt_fp16    = 0;
+  perf.simt_fp32    = perf.simt_cores * 2 * core_clock_rate * 1000;
+  perf.simt_fp64    = perf.simt_cores * fp64_per_simt_core * core_clock_rate * 1000;
+  perf.tensor_fp16  = perf.tensor_cores * 256 * core_clock_rate * 1000;
+  perf.tensor_fp32  = 0;
+  perf.tensor_fp64  = 0;
+  perf.memory_bandwidth = 2 * props.memoryBusWidth / 8 * memory_clock_rate * 1000;
+
+  return arch == MooreThreadsArchitecture::Unknown ? std::optional<TheoreticalPerformance>() : perf;
+}
 
 
 //---------------------
@@ -225,7 +263,10 @@ std::string ApplyMHz(size_t khz) {
 // Special version for floating-point operations per second
 std::string ApplyFlops(uint64_t flops) {
 
-  if (flops >= 1e12) {
+  if (flops >= 1e15) {
+    return ApplyUnits(flops, 1.0 * 1e-15, "PFlops");
+  }
+  else if (flops >= 1e12) {
     return ApplyUnits(flops, 1.0 * 1e-12, "TFlops");
   }
   else if (flops >= 1e9) {
@@ -354,10 +395,12 @@ DeviceInfo GetDeviceInfo(int device) {
   res.parameters.emplace_back(DeviceInfo::ParameterCategory("Caches", std::move(params)));
 
   // Now, we need to estimate the theoretical performance
-#if defined(API_CUDA)
-  res.performance = EstimateCudaPerformance(props.major, props.minor, props.multiProcessorCount,
-                                            clockRate, props.memoryBusWidth, memoryClockRate);
-#endif
+  if (IsCuda()) {
+    res.performance = EstimateCudaPerformance(props, clockRate, memoryClockRate);
+  }
+  else if (IsMusa()) {
+    res.performance = EstimateMusaPerformance(props, clockRate, memoryClockRate);
+  }
 
   // Add estimates to parameters
   if (res.performance) {
