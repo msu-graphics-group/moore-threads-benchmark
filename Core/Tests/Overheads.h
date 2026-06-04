@@ -2,7 +2,7 @@
 #include "Defs.h"
 
 #include "Api/Default.h"
-#include "Microbenchmarks/IMicrobenchmark.h"
+#include "Framework/IMicrobenchmark.h"
 
 namespace overheads {
 

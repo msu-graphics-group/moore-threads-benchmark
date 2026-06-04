@@ -3,8 +3,6 @@
 #include "Api/Default.h"
 #include "DeviceInfo.h"
 
-#include <string>
-
 namespace {
 
 // Vibe-coded by Gemini, implements '/dev/null' for C++ streams
@@ -16,6 +14,7 @@ class NullBuffer : public std::streambuf {
 };
 static NullBuffer null_buffer;
 static std::ostream null(&null_buffer);
+
 
 // Represents performance results after their averaging
 // Units depend on the related benchmark's specifics
@@ -88,4 +87,25 @@ Framework::Framework(size_t n_iterations, size_t n_warmup, size_t n_outliers)
 
 void Framework::Run() {
   PrintDeviceInfo(0, text_stream_, csv_stream_);
+
+  auto &out = text_stream_.get();
+  for (auto &rec : benchmarks_) {
+    out << std::endl;
+    out << "### " << rec.first << "###" << std::endl;
+    out << std::endl;
+    for (auto &bench : rec.second) {
+      out << bench->Name() << std::endl;
+      bench->Reset();
+      while (bench->MoveNext()) {
+        out << "   " << bench->Configuration() << ": ";
+        try {
+          auto results = Average(bench->Run(), 0, 0);
+          out << results.mean << ' ' << bench->Units() << std::endl;
+        }
+        catch (...) {
+          out << "error" << std::endl;
+        }
+      }
+    } // for benchmark
+  } // for record
 }

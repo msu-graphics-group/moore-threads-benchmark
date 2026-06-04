@@ -1,6 +1,6 @@
 #include "Tests/Overheads.h"
 
-#include "Microbenchmarks/CudaEventBenchmark.h"
+#include "Framework/CudaEventBenchmark.h"
 
 //----------------------
 //--- cudaMallocTest ---
