@@ -12,8 +12,29 @@ int main() {
     framework.Run();
     std::cout << std::endl;
 
-    auto tests = { overheads::cudaMallocTest(),
+    auto no_arg_tests = { overheads::cudaEventCreateTest(),
+                          overheads::cudaEventDestroyTest(),
+                          overheads::cudaEventRecordTest(),
+                          overheads::cudaDeviceSynchronizeTest() };
+
+    auto tests = { overheads::cudaMemcpyHostToDeviceTest(),
+                   overheads::cudaMemcpyDeviceToHostTest(),
+                   overheads::cudaMemcpyDeviceToDeviceTest(),
+                   overheads::cudaMallocTest(),
                    overheads::cudaFreeTest() };
+
+    for(auto &test : no_arg_tests){
+      test->Configure(1,100);
+      test->Init();
+      auto times = test->Run();
+      assert(times.size() == 1);
+      test->CleanUp();
+
+      std::cout << test->Name() << ": " << std::endl
+                << "    " << times.front() << " seconds"
+                << std::endl
+                << std::endl;
+    }
 
     for (auto &test : tests) {
       test->Configure(1, 100, 1024 * 1024);

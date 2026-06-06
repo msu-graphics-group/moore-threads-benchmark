@@ -24,6 +24,9 @@ struct Cuda {
   static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = ::cudaDevAttrSingleToDoublePrecisionPerfRatio;
   static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = ::cudaDevAttrMaxSharedMemoryPerMultiprocessor;
 
+  static constexpr cudaMemcpyKind cudaMemcpyHostToDevice      = ::cudaMemcpyHostToDevice;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost      = ::cudaMemcpyDeviceToHost;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice    = ::cudaMemcpyDeviceToDevice;
   //--------------
   //--- Errors ---
   //--------------

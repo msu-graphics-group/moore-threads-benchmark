@@ -22,6 +22,10 @@ struct Musa {
   static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = musaDevAttrSingleToDoublePrecisionPerfRatio;
   static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = musaDevAttrMaxSharedMemoryPerMultiprocessor;
 
+  static constexpr cudaMemcpyKind cudaMemcpyHostToDevice    = ::musaMemcpyHostToDevice;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost    = ::musaMemcpyDeviceToHost;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice  = ::musaMemcpyDeviceToDevice;
+
   //--------------
   //--- Errors ---
   //--------------

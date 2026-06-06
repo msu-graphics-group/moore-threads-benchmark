@@ -22,6 +22,11 @@ struct Hip {
   static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = hipDeviceAttributeSingleToDoublePrecisionPerfRatio;
   static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = hipDeviceAttributeMaxSharedMemoryPerMultiprocessor;
 
+  static constexpr cudaMemcpyKind cudaMemcpyHostToDevice    = ::hipMemcpyHostToDevice;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost    = ::hipMemcpyDeviceToHost;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice  = ::hipMemcpyDeviceToDevice;
+
+
   //--------------
   //--- Errors ---
   //--------------
