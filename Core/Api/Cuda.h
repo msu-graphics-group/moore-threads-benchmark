@@ -79,15 +79,41 @@ struct Cuda {
   static cudaError_t cudaMalloc(T **devPtr, size_t size) {
     return ::cudaMalloc(devPtr, size);
   }
+
+  template<class T>
+  static cudaError_t cudaMallocManaged(T **devPtr, size_t size) {
+    return ::cudaMallocManaged(devPtr, size);
+  }
   
+  template<class T>
+  static cudaError_t cudaMallocHost(T **devPtr, size_t size) {
+    return ::cudaMallocHost(devPtr, size);
+  }
+
   template<class T>
   static cudaError_t cudaFree(T *devPtr) {
     return ::cudaFree(devPtr);
   }
 
   template<class T>
+  static cudaError_t cudaFreeHost(T *devPtr) {
+    return ::cudaFreeHost(devPtr);
+  }
+
+  template<class T>
+  static cudaError_t cudaMemset(T *devPtr, int value, size_t count) {
+    return ::cudaMemset(devPtr, value, count);
+  }
+
+  template<class T>
   static cudaError_t cudaMemcpy(T *dst, const T *src, size_t count, cudaMemcpyKind kind) {
     return ::cudaMemcpy(dst, src, count, kind);
+  }
+
+  template<class T>
+  static cudaError_t cudaMemcpyAsync(T *dst, const T *src, size_t count,
+                                     cudaMemcpyKind kind, cudaStream_t stream = 0) {
+    return ::cudaMemcpyAsync(dst, src, count, kind, stream);
   }
 
   static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {

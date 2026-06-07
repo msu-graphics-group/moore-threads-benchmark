@@ -17,11 +17,19 @@ int main() {
                           overheads::cudaEventRecordTest(),
                           overheads::cudaDeviceSynchronizeTest() };
 
-    auto tests = { overheads::cudaMemcpyHostToDeviceTest(),
+    auto tests = { overheads::cudaMallocTest(),
+                   overheads::cudaMallocManagedTest(),
+                   overheads::cudaMallocHostTest(),
+                   overheads::cudaMemsetTest(),
+                   overheads::cudaMemcpyHostToDeviceTest(),
                    overheads::cudaMemcpyDeviceToHostTest(),
                    overheads::cudaMemcpyDeviceToDeviceTest(),
-                   overheads::cudaMallocTest(),
-                   overheads::cudaFreeTest() };
+                   overheads::cudaMemcpyAsyncHostToDeviceTest(),
+                   overheads::cudaMemcpyAsyncDeviceToHostTest(),
+                   overheads::cudaMemcpyPinnedHostToDeviceTest(),
+                   overheads::cudaMemcpyPinnedDeviceToHostTest(),
+                   overheads::cudaFreeTest(),
+                   overheads::cudaFreeHostTest() };
 
     for(auto &test : no_arg_tests){
       test->Configure(1,100);
