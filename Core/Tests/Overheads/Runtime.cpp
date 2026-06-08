@@ -248,9 +248,8 @@ class cudaMemsetImpl: public CudaEventBenchmark<size_t> {
     }
 
     virtual void SingleRun() override {
-      auto block_size = std::get<0>(Args());
       for(size_t j = 0; j < SubIterations(); j++) {
-        HANDLE_ERROR(Api::cudaMemset(device_, 0, block_size));
+        HANDLE_ERROR(Api::cudaMemset(device_, 0, 1));
       }
     }
 
@@ -286,7 +285,7 @@ class cudaMemcpyImpl: public CudaEventBenchmark<size_t>{
 
     virtual void Init() override{
       auto block_size = std::get<0>(Args());
-      host_ = new char[block_size];
+      host_ = std::make_unique<char[]>(block_size);
       HANDLE_ERROR(Api::cudaMalloc(&device_src_, block_size));
       HANDLE_ERROR(Api::cudaMalloc(&device_dst_, block_size));
     }
@@ -294,15 +293,14 @@ class cudaMemcpyImpl: public CudaEventBenchmark<size_t>{
     virtual void CleanUp() override {
       HANDLE_ERROR(Api::cudaFree(device_src_));
       HANDLE_ERROR(Api::cudaFree(device_dst_));
-      delete[] host_;
+      host_.reset();
 
       device_src_ = nullptr;
       device_dst_ = nullptr;
-      host_ = nullptr;
     }
 
   protected:
-    char* host_ {};
+    std::unique_ptr<char[]> host_;
     char* device_src_ {};
     char* device_dst_ {};
 };
@@ -317,7 +315,7 @@ class cudaMemcpyHostToDeviceImpl: public cudaMemcpyImpl {
     virtual void SingleRun() override {
       auto block_size = std::get<0>(Args());
       for(size_t j = 0; j < SubIterations(); j++){
-        HANDLE_ERROR(Api::cudaMemcpy(device_dst_, host_, block_size,
+        HANDLE_ERROR(Api::cudaMemcpy(device_dst_, host_.get(), block_size,
                                      Api::cudaMemcpyHostToDevice));
       }
     }
@@ -333,7 +331,7 @@ class cudaMemcpyDeviceToHostImpl: public cudaMemcpyImpl {
     virtual void SingleRun() override {
       auto block_size = std::get<0>(Args());
       for(size_t j = 0; j < SubIterations(); j++){
-        HANDLE_ERROR(Api::cudaMemcpy(host_, device_src_, block_size,
+        HANDLE_ERROR(Api::cudaMemcpy(host_.get(), device_src_, block_size,
                                      Api::cudaMemcpyDeviceToHost));
       }
     }
@@ -379,25 +377,36 @@ std::unique_ptr<IMicrobenchmark<size_t>> cudaMemcpyDeviceToDeviceTest() {
 
 namespace {
 
+struct CudaFreeHostDeleter {
+  void operator()(char *ptr) const noexcept {
+    if (ptr) {
+      Api::cudaFreeHost(ptr);
+    }
+  }
+};
+
+using PinnedHostPtr = std::unique_ptr<char, CudaFreeHostDeleter>;
+
 class cudaMemcpyAsyncImpl: public CudaEventBenchmark<size_t> {
   public:
     cudaMemcpyAsyncImpl() = default;
 
     virtual void Init() override {
       auto block_size = std::get<0>(Args());
-      HANDLE_ERROR(Api::cudaMallocHost(&host_, block_size));
+      char *host{};
+      HANDLE_ERROR(Api::cudaMallocHost(&host, block_size));
+      host_.reset(host);
       HANDLE_ERROR(Api::cudaMalloc(&device_, block_size));
     }
 
     virtual void CleanUp() override {
       HANDLE_ERROR(Api::cudaFree(device_));
-      HANDLE_ERROR(Api::cudaFreeHost(host_));
+      host_.reset();
       device_ = nullptr;
-      host_ = nullptr;
     }
 
   protected:
-    char *host_{};
+    PinnedHostPtr host_;
     char *device_{};
 };
 
@@ -409,9 +418,8 @@ class cudaMemcpyAsyncHostToDeviceImpl: public cudaMemcpyAsyncImpl {
     virtual std::string Name() const override { return"overheads::cudaMemcpyAsyncHostToDevice()";}
 
     virtual void SingleRun() override {
-      auto block_size = std::get<0>(Args());
       for(size_t j = 0; j < SubIterations(); j++) {
-        HANDLE_ERROR(Api::cudaMemcpyAsync(device_, host_, block_size,
+        HANDLE_ERROR(Api::cudaMemcpyAsync(device_, host_.get(), 1,
                                           Api::cudaMemcpyHostToDevice));
       }
       HANDLE_ERROR(Api::cudaDeviceSynchronize());
@@ -426,9 +434,8 @@ class cudaMemcpyAsyncDeviceToHostImpl: public cudaMemcpyAsyncImpl {
     virtual std::string Name() const override { return"overheads::cudaMemcpyAsyncDeviceToHost()";}
 
     virtual void SingleRun() override {
-      auto block_size = std::get<0>(Args());
       for(size_t j = 0; j < SubIterations(); j++) {
-        HANDLE_ERROR(Api::cudaMemcpyAsync(host_, device_, block_size,
+        HANDLE_ERROR(Api::cudaMemcpyAsync(host_.get(), device_, 1,
                                           Api::cudaMemcpyDeviceToHost));
       }
       HANDLE_ERROR(Api::cudaDeviceSynchronize());
@@ -461,19 +468,20 @@ class cudaMemcpyPinnedImpl: public CudaEventBenchmark<size_t> {
 
     virtual void Init() override {
       auto block_size = std::get<0>(Args());
-      HANDLE_ERROR(Api::cudaMallocHost(&host_, block_size));
+      char *host{};
+      HANDLE_ERROR(Api::cudaMallocHost(&host, block_size));
+      host_.reset(host);
       HANDLE_ERROR(Api::cudaMalloc(&device_, block_size));
     }
 
     virtual void CleanUp() override {
-      HANDLE_ERROR(Api::cudaFreeHost(host_));
       HANDLE_ERROR(Api::cudaFree(device_));
-      host_ = nullptr;
+      host_.reset();
       device_ = nullptr;
     }
 
   protected:
-    char* host_{};
+    PinnedHostPtr host_;
     char* device_{};
 };
 
@@ -485,9 +493,8 @@ class cudaMemcpyPinnedHostToDeviceImpl: public cudaMemcpyPinnedImpl {
     virtual std::string Name() const override { return"overheads::cudaMemcpyPinnedHostToDevice()";}
 
     virtual void SingleRun() override {
-      auto block_size = std::get<0>(Args());
       for(size_t j = 0; j < SubIterations(); j++) {
-        HANDLE_ERROR(Api::cudaMemcpy(device_, host_, block_size,
+        HANDLE_ERROR(Api::cudaMemcpy(device_, host_.get(), 1,
                                      Api::cudaMemcpyHostToDevice));
       }
     }
@@ -501,9 +508,8 @@ class cudaMemcpyPinnedDeviceToHostImpl: public cudaMemcpyPinnedImpl {
     virtual std::string Name() const override { return"overheads::cudaMemcpyPinnedDeviceToHost()";}
 
     virtual void SingleRun() override {
-      auto block_size = std::get<0>(Args());
       for(size_t j = 0; j < SubIterations(); j++) {
-        HANDLE_ERROR(Api::cudaMemcpy(host_, device_, block_size,
+        HANDLE_ERROR(Api::cudaMemcpy(host_.get(), device_, 1,
                                      Api::cudaMemcpyDeviceToHost));
       }
     }
