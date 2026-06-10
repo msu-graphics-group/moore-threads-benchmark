@@ -22,9 +22,11 @@ struct Hip {
   static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = hipDeviceAttributeSingleToDoublePrecisionPerfRatio;
   static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = hipDeviceAttributeMaxSharedMemoryPerMultiprocessor;
 
-  static constexpr cudaMemcpyKind cudaMemcpyHostToDevice    = ::hipMemcpyHostToDevice;
-  static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost    = ::hipMemcpyDeviceToHost;
-  static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice  = ::hipMemcpyDeviceToDevice;
+  static constexpr unsigned int cudaHostAllocDefault                           = hipHostAllocDefault;
+
+  static constexpr cudaMemcpyKind cudaMemcpyHostToDevice                       = ::hipMemcpyHostToDevice;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost                       = ::hipMemcpyDeviceToHost;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice                     = ::hipMemcpyDeviceToDevice;
 
 
   //--------------
@@ -84,6 +86,11 @@ struct Hip {
   static cudaError_t cudaMallocManaged(T **devPtr, size_t size) {
     return ::hipMallocManaged(devPtr, size);
   }
+
+  template<class T>
+  static cudaError_t cudaHostAlloc(T **devPtr, size_t size, unsigned int flags) {
+    return ::hipHostMalloc(devPtr, size, flags);
+  }
   
   template<class T>
   static cudaError_t cudaFree(T *devPtr) {
@@ -111,13 +118,13 @@ struct Hip {
     return ::hipMemcpyAsync(dst, src, count, kind, stream);
   }
 
-  static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
-    return ::hipEventRecord(event, stream);
-  }
-  
   //--------------
   //--- Events ---
   //--------------
+
+  static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
+    return ::hipEventRecord(event, stream);
+  }
 
   static cudaError_t cudaEventCreate(cudaEvent_t *event) {
     return ::hipEventCreate(event);

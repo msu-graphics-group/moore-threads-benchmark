@@ -10,7 +10,7 @@ std::unique_ptr<IMicrobenchmark<size_t>> cudaMallocTest();
 
 std::unique_ptr<IMicrobenchmark<size_t>> cudaMallocManagedTest();
 
-std::unique_ptr<IMicrobenchmark<size_t>> cudaMallocHostTest();
+std::unique_ptr<IMicrobenchmark<size_t>> cudaHostAllocTest();
 
 std::unique_ptr<IMicrobenchmark<size_t>> cudaFreeTest();
 
@@ -40,24 +40,5 @@ std::unique_ptr<IMicrobenchmark<>> cudaEventRecordTest();
 
 std::unique_ptr<IMicrobenchmark<>> cudaDeviceSynchronizeTest();
 
-  // TODO:
-  // - cudaMallocManaged                +
-  // - cudaMallocHost                   +
-  // - cudaFreeHost                     +
-  // - cudaMemset                       +
-  // - cudaMemcpy                       +
-  //    - cudaMemcpyHostToDevice
-  //    - cudaMemcpyDeviceToHost
-  //    - cudaMemcpyDeviceToDevice
-  // - cudaMemcpyAsync                  +
-  //    - cudaMemcpyAsyncHostToDevice
-  //    - cudaMemcpyAsyncDeviceToHost
-  // - cudaMemcpyPinned                 +
-  //    - cudaMemcpyPinnedHostToDevice
-  //    - cudaMemcpyPinnedDeviceToHost
-  // - cudaEventCreate                  +
-  // - cudaEventDestroy                 +
-  // - cudaEventRecord                  +
-  // - cudaDeviceSynchronize            +
 
 } // namespace overheads

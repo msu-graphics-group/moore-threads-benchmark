@@ -22,9 +22,11 @@ struct Musa {
   static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = musaDevAttrSingleToDoublePrecisionPerfRatio;
   static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = musaDevAttrMaxSharedMemoryPerMultiprocessor;
 
-  static constexpr cudaMemcpyKind cudaMemcpyHostToDevice    = ::musaMemcpyHostToDevice;
-  static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost    = ::musaMemcpyDeviceToHost;
-  static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice  = ::musaMemcpyDeviceToDevice;
+  static constexpr unsigned int cudaHostAllocDefault                           = musaHostAllocDefault;
+
+  static constexpr cudaMemcpyKind cudaMemcpyHostToDevice                       = ::musaMemcpyHostToDevice;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost                       = ::musaMemcpyDeviceToHost;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice                     = ::musaMemcpyDeviceToDevice;
 
   //--------------
   //--- Errors ---
@@ -83,6 +85,11 @@ struct Musa {
   static cudaError_t cudaMallocManaged(T **devPtr, size_t size) {
     return ::musaMallocManaged(devPtr, size);
   }
+
+  template<class T>
+  static cudaError_t cudaHostAlloc(T **devPtr, size_t size, unsigned int flags) {
+    return ::musaHostAlloc(devPtr, size, unsigned int flags);
+  }
   
   template<class T>
   static cudaError_t cudaFree(T *devPtr) {
@@ -110,13 +117,13 @@ struct Musa {
     return ::musaMemcpyAsync(dst, src, kind, stream);
   }
 
-  static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
-    return ::musaEventRecord(event, stream);
-  }
-
   //--------------
   //--- Events ---
   //--------------
+
+  static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
+    return ::musaEventRecord(event, stream);
+  }
 
   static cudaError_t cudaEventCreate(cudaEvent_t *event) {
     return ::musaEventCreate(event);

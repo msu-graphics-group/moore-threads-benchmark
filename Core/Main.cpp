@@ -19,7 +19,7 @@ int main() {
 
     auto tests = { overheads::cudaMallocTest(),
                    overheads::cudaMallocManagedTest(),
-                   overheads::cudaMallocHostTest(),
+                   overheads::cudaHostAllocTest(),
                    overheads::cudaMemsetTest(),
                    overheads::cudaMemcpyHostToDeviceTest(),
                    overheads::cudaMemcpyDeviceToHostTest(),

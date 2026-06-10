@@ -3,6 +3,11 @@
 
 #include <cuda_runtime.h>
 
+// Ugly, but works
+constexpr auto _cudaHostAllocDefault = cudaHostAllocDefault;
+#undef cudaHostAllocDefault
+constexpr auto cudaHostAllocDefault = _cudaHostAllocDefault;
+
 
 // Wrap CUDA functions and types as stand alone structure for easier integration with microbenchmarks
 struct Cuda {
@@ -24,9 +29,12 @@ struct Cuda {
   static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = ::cudaDevAttrSingleToDoublePrecisionPerfRatio;
   static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = ::cudaDevAttrMaxSharedMemoryPerMultiprocessor;
 
-  static constexpr cudaMemcpyKind cudaMemcpyHostToDevice      = ::cudaMemcpyHostToDevice;
-  static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost      = ::cudaMemcpyDeviceToHost;
-  static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice    = ::cudaMemcpyDeviceToDevice;
+  static constexpr unsigned int cudaHostAllocDefault                           = ::cudaHostAllocDefault;
+
+  static constexpr cudaMemcpyKind cudaMemcpyHostToDevice                       = ::cudaMemcpyHostToDevice;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost                       = ::cudaMemcpyDeviceToHost;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice                     = ::cudaMemcpyDeviceToDevice;
+  
   //--------------
   //--- Errors ---
   //--------------
@@ -86,8 +94,8 @@ struct Cuda {
   }
   
   template<class T>
-  static cudaError_t cudaMallocHost(T **devPtr, size_t size) {
-    return ::cudaMallocHost(devPtr, size);
+  static cudaError_t cudaHostAlloc(T **devPtr, size_t size, unsigned int flags) {
+    return ::cudaHostAlloc(devPtr, size, flags);
   }
 
   template<class T>
@@ -116,13 +124,13 @@ struct Cuda {
     return ::cudaMemcpyAsync(dst, src, count, kind, stream);
   }
 
-  static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
-    return ::cudaEventRecord(event, stream);
-  }
-
   //--------------
   //--- Events ---
   //--------------
+
+  static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
+    return ::cudaEventRecord(event, stream);
+  }
 
   static cudaError_t cudaEventCreate(cudaEvent_t *event) {
     return ::cudaEventCreate(event);
