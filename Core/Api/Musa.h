@@ -22,6 +22,12 @@ struct Musa {
   static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = musaDevAttrSingleToDoublePrecisionPerfRatio;
   static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = musaDevAttrMaxSharedMemoryPerMultiprocessor;
 
+  static constexpr unsigned int cudaHostAllocDefault                           = musaHostAllocDefault;
+
+  static constexpr cudaMemcpyKind cudaMemcpyHostToDevice                       = ::musaMemcpyHostToDevice;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost                       = ::musaMemcpyDeviceToHost;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice                     = ::musaMemcpyDeviceToDevice;
+
   //--------------
   //--- Errors ---
   //--------------
@@ -74,6 +80,16 @@ struct Musa {
   static cudaError_t cudaMalloc(T **devPtr, size_t size) {
     return ::musaMalloc(devPtr, size);
   }
+
+  template<class T>
+  static cudaError_t cudaMallocManaged(T **devPtr, size_t size) {
+    return ::musaMallocManaged(devPtr, size);
+  }
+
+  template<class T>
+  static cudaError_t cudaHostAlloc(T **devPtr, size_t size, unsigned int flags) {
+    return ::musaHostAlloc(devPtr, size, unsigned int flags);
+  }
   
   template<class T>
   static cudaError_t cudaFree(T *devPtr) {
@@ -81,17 +97,33 @@ struct Musa {
   }
 
   template<class T>
+  static cudaError_t cudaFreeHost(T *devptr) {
+    return ::musaFreeHost(devPtr);
+  }
+
+  template<class T>
+  static cudaError_t cudaMemset(T *devPtr, int value, size_t count) {
+    return ::musaMemset(devPtr, value, count);
+  }
+
+  template<class T>
   static cudaError_t cudaMemcpy(T *dst, const T *src, size_t count, cudaMemcpyKind kind) {
     return ::musaMemcpy(dst, src, count, kind);
   }
 
-  static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
-    return ::musaEventRecord(event, stream);
+  template<class T>
+  static cudaError_t cudaMemcpyAsync(T *dst, const T *src, size_t count,
+                                     cudaMemcpyKind kind, cudaStream_t stream = 0) {
+    return ::musaMemcpyAsync(dst, src, kind, stream);
   }
 
   //--------------
   //--- Events ---
   //--------------
+
+  static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
+    return ::musaEventRecord(event, stream);
+  }
 
   static cudaError_t cudaEventCreate(cudaEvent_t *event) {
     return ::musaEventCreate(event);

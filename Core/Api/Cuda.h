@@ -3,6 +3,11 @@
 
 #include <cuda_runtime.h>
 
+// Ugly, but works
+constexpr auto _cudaHostAllocDefault = cudaHostAllocDefault;
+#undef cudaHostAllocDefault
+constexpr auto cudaHostAllocDefault = _cudaHostAllocDefault;
+
 
 // Wrap CUDA functions and types as stand alone structure for easier integration with microbenchmarks
 struct Cuda {
@@ -24,6 +29,12 @@ struct Cuda {
   static constexpr cudaDeviceAttr cudaDevAttrSingleToDoublePrecisionPerfRatio  = ::cudaDevAttrSingleToDoublePrecisionPerfRatio;
   static constexpr cudaDeviceAttr cudaDevAttrMaxSharedMemoryPerMultiProcessor  = ::cudaDevAttrMaxSharedMemoryPerMultiprocessor;
 
+  static constexpr unsigned int cudaHostAllocDefault                           = ::cudaHostAllocDefault;
+
+  static constexpr cudaMemcpyKind cudaMemcpyHostToDevice                       = ::cudaMemcpyHostToDevice;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost                       = ::cudaMemcpyDeviceToHost;
+  static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice                     = ::cudaMemcpyDeviceToDevice;
+  
   //--------------
   //--- Errors ---
   //--------------
@@ -76,10 +87,30 @@ struct Cuda {
   static cudaError_t cudaMalloc(T **devPtr, size_t size) {
     return ::cudaMalloc(devPtr, size);
   }
+
+  template<class T>
+  static cudaError_t cudaMallocManaged(T **devPtr, size_t size) {
+    return ::cudaMallocManaged(devPtr, size);
+  }
   
+  template<class T>
+  static cudaError_t cudaHostAlloc(T **devPtr, size_t size, unsigned int flags) {
+    return ::cudaHostAlloc(devPtr, size, flags);
+  }
+
   template<class T>
   static cudaError_t cudaFree(T *devPtr) {
     return ::cudaFree(devPtr);
+  }
+
+  template<class T>
+  static cudaError_t cudaFreeHost(T *devPtr) {
+    return ::cudaFreeHost(devPtr);
+  }
+
+  template<class T>
+  static cudaError_t cudaMemset(T *devPtr, int value, size_t count) {
+    return ::cudaMemset(devPtr, value, count);
   }
 
   template<class T>
@@ -87,13 +118,19 @@ struct Cuda {
     return ::cudaMemcpy(dst, src, count, kind);
   }
 
-  static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
-    return ::cudaEventRecord(event, stream);
+  template<class T>
+  static cudaError_t cudaMemcpyAsync(T *dst, const T *src, size_t count,
+                                     cudaMemcpyKind kind, cudaStream_t stream = 0) {
+    return ::cudaMemcpyAsync(dst, src, count, kind, stream);
   }
 
   //--------------
   //--- Events ---
   //--------------
+
+  static cudaError_t cudaEventRecord(cudaEvent_t event, cudaStream_t stream = 0) {
+    return ::cudaEventRecord(event, stream);
+  }
 
   static cudaError_t cudaEventCreate(cudaEvent_t *event) {
     return ::cudaEventCreate(event);
