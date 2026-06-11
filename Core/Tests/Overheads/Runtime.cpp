@@ -604,16 +604,14 @@ class cudaEventDestroyImpl: public CudaEventBenchmark<> {
     virtual std::string Name() const override{ return "overheads::cudaEventDestroy()"; }
 
     virtual void Init() override {
-      events.reserve(SubIterations());
-      for (size_t j = 0; j < SubIterations(); j++) {
-        Api::cudaEvent_t event{};
-        HANDLE_ERROR(Api::cudaEventCreate(&event));
-        events.emplace_back(event);
+      events.resize(SubIterations());
+      for (size_t j = 0; j < events.size(); j++) {
+        HANDLE_ERROR(Api::cudaEventCreate(events.data() + j));
       }
     }
 
     virtual void SingleRun() override {
-      for (auto event : events) {
+      for (const auto &event : events) {
         HANDLE_ERROR(Api::cudaEventDestroy(event));
       }
     }

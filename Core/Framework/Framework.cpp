@@ -5,7 +5,8 @@
 
 namespace {
 
-// Vibe-coded by Gemini, implements '/dev/null' for C++ streams
+// Implements '/dev/null' for C++ streams
+// Coded by Gemini
 class NullBuffer : public std::streambuf {
   public:
     int overflow(int c) override {
@@ -77,6 +78,48 @@ void PrintDeviceInfo(int device, std::ostream &text_stream, std::ostream &csv_st
   }
 }
 
+std::string FormatResults(const ISealedBenchmark &bench, const Results &min, const Results &max) {
+  std::ostringstream oss;
+  switch (bench.Better()) {
+    case WhoIsBetter::LowerIsBetter:
+      oss << ToString(std::make_pair(min.mean, bench.Units()));
+      break;
+
+    case WhoIsBetter::HigherIsBetter:
+      oss << ToString(std::make_pair(max.mean, bench.Units()));
+      break;
+
+    case WhoIsBetter::NeedMinMax:
+      {
+        std::string lo = ToString(std::make_pair(min.mean, bench.Units()));
+        std::string hi = ToString(std::make_pair(max.mean, bench.Units()));
+        if (lo == hi) {
+          oss << lo;
+        }
+        else {
+          oss << lo << " - " << hi;
+        }
+      }
+      break;
+
+    default:
+      throw std::runtime_error("Unknown benchmark metrics");
+  }
+
+  return oss.str();
+}
+
+void PrintBenchmarkSection(const std::string &name, std::ostream &text_stream, std::ostream &csv_stream) {
+  text_stream << std::endl;
+  text_stream << "### " << name << " ###" << std::endl;
+  text_stream << std::endl;
+}
+
+void PrintBenchmarkResults(const std::string &name, const std::string &results,
+                           std::ostream &text_stream, std::ostream &csv_stream) {
+  text_stream << "   " << name << ": " << results << "   " << std::endl;
+}
+
 } // unnamed namespace
 
 
@@ -90,22 +133,30 @@ void Framework::Run() {
 
   auto &out = text_stream_.get();
   for (auto &rec : benchmarks_) {
-    out << std::endl;
-    out << "### " << rec.first << "###" << std::endl;
-    out << std::endl;
+    PrintBenchmarkSection(rec.first, text_stream_, csv_stream_);
+
     for (auto &bench : rec.second) {
-      out << bench->Name() << std::endl;
+      std::optional<Results> min, max;
+
       bench->Reset();
       while (bench->MoveNext()) {
-        out << "   " << bench->Configuration() << ": ";
         try {
           auto results = Average(bench->Run(), 0, 0);
-          out << results.mean << ' ' << bench->Units() << std::endl;
+          if (!min || results.mean < min->mean) {
+            min = results;
+          }
+          if (!max || results.mean > max->mean) {
+            max = results;
+          }
         }
-        catch (...) {
-          out << "error" << std::endl;
+        catch (std::exception &) {
+          // TODO: implement logging
+          HANDLE_ERROR(Api::cudaDeviceReset());
         }
       }
+
+      std::string results = min && max ? FormatResults(*bench, *min, *max) : "error";
+      PrintBenchmarkResults(bench->Name(), results, text_stream_, csv_stream_);
     } // for benchmark
   } // for record
 }

@@ -1,17 +1,20 @@
 #pragma once
 #include "Defs.h"
 
+#include "Units.h"
+
+// Defines how to interpret the measured metrics
+enum class WhoIsBetter {
+  LowerIsBetter,  // Lower values are better (e.g., execution time)
+  HigherIsBetter, // Higher values are better (e.g., performance in TFlops)
+  NeedMinMax      // Both min and max matter for comparison
+};
+
+
 // Bundles 'IMicrobenchmark' with some test data,
 // so we can perform all tests without any knowledge of their nature
 class ISealedBenchmark {
   public:
-    // Defines how to interpret the measured metrics
-    enum class WhoIsBetter {
-      LowerIsBetter,  // Lower values are better (e.g., execution time)
-      HigherIsBetter, // Higher values are better (e.g., performance in TFlops)
-      NeedMinMax      // Both min and max matter for comparison
-    };
-
     ISealedBenchmark(const ISealedBenchmark &) = delete;
     ISealedBenchmark &operator =(const ISealedBenchmark &) = delete;
     virtual ~ISealedBenchmark() = default;
@@ -38,7 +41,7 @@ class ISealedBenchmark {
 
     // Returns the units of the performance metrics
     // E.g., "TFlops", "GB/s", "seconds", etc
-    virtual std::string Units() const = 0;
+    virtual Unit Units() const = 0;
 
     // Defines the rule for determining 'better' performance
     // Lower values are better, higher values are better, or both min/max matter

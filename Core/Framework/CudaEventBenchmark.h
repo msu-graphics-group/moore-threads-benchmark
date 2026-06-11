@@ -9,10 +9,6 @@
 template<typename ...ARGS>
 class CudaEventBenchmark : public IMicrobenchmark<ARGS...> {
   public:
-    // Just performs a series of inner subiterations
-    // The elapse time will be measured by 'Run()'
-    virtual void SingleRun() = 0;
-
     // The member of 'IMicrobenchmark'
     virtual void Configure(size_t iterations, size_t sub_iterations, ARGS... args) override final {
       iterations_ = iterations;
@@ -30,9 +26,12 @@ class CudaEventBenchmark : public IMicrobenchmark<ARGS...> {
       std::vector<double> times;
       times.reserve(Iterations());
       for (size_t i = 0; i < Iterations(); i++) {
+        Init();
+        HANDLE_ERROR(Api::cudaDeviceSynchronize());
         HANDLE_ERROR(Api::cudaEventRecord(start_event));
         SingleRun();
         HANDLE_ERROR(Api::cudaEventRecord(stop_event));
+        CleanUp();
 
         float ms{};
         HANDLE_ERROR(Api::cudaEventSynchronize(stop_event));
@@ -48,6 +47,16 @@ class CudaEventBenchmark : public IMicrobenchmark<ARGS...> {
 
   protected:
     CudaEventBenchmark() = default;
+
+    // Initializes the benchmark, allocates the required resources
+    virtual void Init() {}
+
+    // Just performs a series of inner subiterations
+    // The elapse time will be measured by 'Run()'
+    virtual void SingleRun() = 0;
+
+    // Cleans up any resources used by the benchmark
+    virtual void CleanUp() {}
 
     // Returns the value passed to 'Configure()'
     size_t Iterations() const { return iterations_; }

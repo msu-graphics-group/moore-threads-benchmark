@@ -29,7 +29,7 @@ class SealedBenchmark final : public ISealedBenchmark {
                     const std::vector<std::tuple<Args...>> &configs,
                     size_t iterations,
                     size_t sub_iterations,
-                    const std::string &units,
+                    Unit units,
                     WhoIsBetter better)
       : bench_(std::move(benchmark)), configs_(configs),
         iters_(iterations), sub_iters_(sub_iterations),
@@ -55,18 +55,8 @@ class SealedBenchmark final : public ISealedBenchmark {
       std::apply([&](const auto &... unpacked) {
         bench_->Configure(iters_, sub_iters_, unpacked...);
       }, args);
-
-      std::vector<double> results;
-      bench_->Init();
-      try {
-        results = bench_->Run();
-      }
-      catch (const std::exception &) {
-        bench_->CleanUp();
-        throw;
-      }
-      bench_->CleanUp();
-      return results;
+      
+      return bench_->Run();
     }
 
     // The member of 'ISealedBenchmark'
@@ -76,7 +66,7 @@ class SealedBenchmark final : public ISealedBenchmark {
     }
 
     // The member of 'ISealedBenchmark'
-    std::string Units() const override { return units_; }
+    Unit Units() const override { return units_; }
 
     // The member of 'ISealedBenchmark'
     WhoIsBetter Better() const override { return better_; }
@@ -87,6 +77,6 @@ class SealedBenchmark final : public ISealedBenchmark {
     size_t iters_{ 0 };
     size_t sub_iters_{ 0 };
     int current_{ -1 };
-    std::string units_;
-    WhoIsBetter better_;
+    Unit units_{ Unit::Seconds };
+    WhoIsBetter better_{ WhoIsBetter::NeedMinMax };
 };

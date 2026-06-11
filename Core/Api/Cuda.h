@@ -79,6 +79,10 @@ struct Cuda {
     return ::cudaDeviceSynchronize();
   }
 
+  static cudaError_t cudaDeviceReset() {
+    return ::cudaDeviceReset();
+  }
+
   //--------------
   //--- Memory ---
   //--------------
