@@ -24,7 +24,11 @@ inline constexpr bool is_not_tuple_v = is_not_tuple<T>::value;
 // May be configured for various scenarios
 class Framework {
   public:
-    Framework(size_t n_iterations, size_t n_warmup, size_t n_outliers);
+    Framework();
+
+    // Sets the fraction of iterations reserved for warm-up and outlier handling
+    // These iterations are excluded from the final benchmark results
+    void ExcludeIterations(double warm_up_fraction, double outlier_fraction);
 
     // Sets new stream for user-friendly text output
     // By default, this stream is disabled
@@ -39,16 +43,16 @@ class Framework {
     void SetTag(const std::string &tag) { current_tag_ = tag; }
 
     // Primary template: accepts configurations as vector<tuple<Args...>>
-    // This is the general interface for benchmarks that need multiple arguments.
     template <typename... Args>
     void AddBenchmark(std::unique_ptr<IMicrobenchmark<Args...>> &&benchmark,
-                             const std::vector<std::tuple<Args...>> &configs,
-                             size_t iterations, size_t sub_iterations,
-                             Unit units, WhoIsBetter better) {
+                      const std::vector<std::tuple<Args...>> &configs,
+                      size_t iterations, size_t sub_iterations,
+                      Unit units, const std::function<double(double, Args...)> &seconds_to_units,
+                      WhoIsBetter better) {
       assert(iterations != 0);
       assert(sub_iterations != 0);
       auto sealed_benchmark = std::unique_ptr<ISealedBenchmark>(new SealedBenchmark<Args...>(
-        std::move(benchmark), configs, iterations, sub_iterations, units, better
+        std::move(benchmark), configs, iterations, sub_iterations, units, seconds_to_units, better
       ));
       benchmarks_[current_tag_].emplace_back(std::move(sealed_benchmark));
     }
@@ -59,27 +63,29 @@ class Framework {
     void AddBenchmark(std::unique_ptr<IMicrobenchmark<T>> &&benchmark,
                       const std::vector<T> &configs,
                       size_t iterations, size_t sub_iterations,
-                      Unit units, WhoIsBetter better) {
+                      Unit units, const std::function<double(double, T)> &seconds_to_units,
+                      WhoIsBetter better) {
       std::vector<std::tuple<T>> tuple_configs;
       tuple_configs.reserve(configs.size());
       for (const auto &val : configs) {
-          tuple_configs.emplace_back(val);
+        tuple_configs.emplace_back(val);
       }
       AddBenchmark(std::move(benchmark), tuple_configs, iterations,
-                   sub_iterations, units, better);
+                   sub_iterations, units, seconds_to_units, better);
     }
 
     // Convenience overload for benchmarks that require ZERO arguments
     // Coded by DeepSeek-v4
     void AddBenchmark(std::unique_ptr<IMicrobenchmark<>> &&benchmark,
                       size_t iterations, size_t sub_iterations,
-                      Unit units, WhoIsBetter better) {
+                      Unit units, const std::function<double(double)> &seconds_to_units,
+                      WhoIsBetter better) {
       assert(iterations != 0);
       assert(sub_iterations != 0);
-      std::vector<std::tuple<>> configs(1); // one empty configuration
+      std::vector<std::tuple<>> configs(1);
       auto sealed_benchmark = std::unique_ptr<ISealedBenchmark>(
-          new SealedBenchmark<>(std::move(benchmark), configs,
-                                iterations, sub_iterations, units, better));
+        new SealedBenchmark<>(std::move(benchmark), configs,
+                              iterations, sub_iterations, units, seconds_to_units, better));
       benchmarks_[current_tag_].emplace_back(std::move(sealed_benchmark));
     }
 
@@ -87,7 +93,7 @@ class Framework {
     void Run();
 
   private:
-    size_t n_iterations_, n_warmup_, n_outliers_;
+    double warm_up_fraction_{}, outlier_fraction_{};
     std::reference_wrapper<std::ostream> text_stream_;
     std::reference_wrapper<std::ostream> csv_stream_;
 

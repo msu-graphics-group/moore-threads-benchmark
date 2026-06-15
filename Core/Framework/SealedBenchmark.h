@@ -5,6 +5,7 @@
 namespace helpers {
 
 // Helper to turn a configuration tuple into a human-readable string
+// Coded by DeepSeek-v4
 template <typename... Args>
 std::string TupleToString(const std::tuple<Args...> &t) {
   std::ostringstream oss;
@@ -21,7 +22,8 @@ std::string TupleToString(const std::tuple<Args...> &t) {
 } // namespace helpers
 
 
-// Seals IMicrobenchmark<Args...> into ISealedBenchmark, implemented by DeepSeek-v4
+// Seals IMicrobenchmark<Args...> into ISealedBenchmark
+// Coded by DeepSeek-v4
 template <typename... Args>
 class SealedBenchmark final : public ISealedBenchmark {
   public:
@@ -30,10 +32,11 @@ class SealedBenchmark final : public ISealedBenchmark {
                     size_t iterations,
                     size_t sub_iterations,
                     Unit units,
+                    const std::function<double(double, Args...)> &seconds_to_units,
                     WhoIsBetter better)
       : bench_(std::move(benchmark)), configs_(configs),
         iters_(iterations), sub_iters_(sub_iterations),
-        units_(units), better_(better)
+        units_(units), seconds_to_units_(seconds_to_units), better_(better)
     { assert(bench_ != nullptr); }
 
     // The member of 'ISealedBenchmark'
@@ -56,7 +59,16 @@ class SealedBenchmark final : public ISealedBenchmark {
         bench_->Configure(iters_, sub_iters_, unpacked...);
       }, args);
       
-      return bench_->Run();
+      auto values = bench_->Run();
+
+      if (seconds_to_units_) {
+        for (auto &time : values) {
+          std::apply([&](const auto &... unpacked) {
+            time = seconds_to_units_(time, unpacked...);
+          }, args);
+        }
+      }
+      return values;
     }
 
     // The member of 'ISealedBenchmark'
@@ -78,5 +90,6 @@ class SealedBenchmark final : public ISealedBenchmark {
     size_t sub_iters_{ 0 };
     int current_{ -1 };
     Unit units_{ Unit::Seconds };
+    std::function<double(double, Args...)> seconds_to_units_;
     WhoIsBetter better_{ WhoIsBetter::NeedMinMax };
 };

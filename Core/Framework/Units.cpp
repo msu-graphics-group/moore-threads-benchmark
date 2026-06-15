@@ -1,10 +1,9 @@
 #include "Units.h"
 
-#include <cmath>
-#include <iomanip>
-#include <sstream>
-#include <string>
-#include <vector>
+
+std::string ToString(double value, Unit unit) {
+  return ToString(std::make_pair(value, unit));
+}
 
 std::string ToString(const std::pair<double, Unit> &value) {
   double v = value.first;
@@ -32,6 +31,15 @@ std::string ToString(const std::pair<double, Unit> &value) {
     case Unit::Cycles:
       prefixes = { {1e12, "TCycles"}, {1e9,  "GCycles"}, {1e6,  "MCycles"}, {1e3,  "KCycles"}, {1.0,  "Cycles"} };
       break;
+
+    case Unit::Hz:
+      prefixes = { {1e9, "GHz"}, {1e6, "MHz"}, {1e3, "KHz"}, {1.0, "Hz"} };
+      break;
+
+    case Unit::Bytes:
+      prefixes = { {1024 * 1024 * 1024 * 1024.0, "TB"}, {1024 * 1024 * 1024.0, "GB"},
+                   {1024 * 1024.0, "MB"}, {1024.0, "KB"}, {1.0, "Bytes"} };
+      break;
   }
 
   std::optional<std::pair<double, std::string>> chosen;
@@ -46,7 +54,8 @@ std::string ToString(const std::pair<double, Unit> &value) {
   }
 
   std::ostringstream oss;
-  oss << std::fixed << std::setprecision(1)
-      << std::round(v / chosen->first * 10.0) / 10.0 << ' ' << chosen->second;
+  double scaled_value = v / chosen->first;
+  bool need_dot = (int)(std::round(scaled_value * 10) - std::round(scaled_value) * 10) != 0;
+  oss << std::fixed << std::setprecision(need_dot ? 1 : 0) << scaled_value << ' ' << chosen->second;
   return oss.str();
 }

@@ -44,7 +44,6 @@ namespace overheads {
 
 std::unique_ptr<IMicrobenchmark<size_t>> cudaMallocTest() {
   return std::make_unique<cudaMallocImpl>();
-
 }
 
 } // namespace overheads
@@ -383,6 +382,7 @@ std::unique_ptr<IMicrobenchmark<size_t>> cudaMemcpyDeviceToDeviceTest() {
 
 namespace {
 
+// Coded by DeepSeek-v4
 struct CudaFreeHostDeleter {
   void operator()(char *ptr) const noexcept {
     if (ptr) {
@@ -406,7 +406,6 @@ class cudaMemcpyAsyncImpl: public CudaEventBenchmark<size_t> {
     }
 
     virtual void CleanUp() override {
-      HANDLE_ERROR(Api::cudaDeviceSynchronize());
       HANDLE_ERROR(Api::cudaFree(device_));
       host_.reset();
       device_ = nullptr;

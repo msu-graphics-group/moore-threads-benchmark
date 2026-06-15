@@ -13,6 +13,7 @@ class NullBuffer : public std::streambuf {
         return traits_type::not_eof(c);
     }
 };
+
 static NullBuffer null_buffer;
 static std::ostream null(&null_buffer);
 
@@ -28,11 +29,26 @@ struct Results {
 };
 
 // Removes warmup iterations outliers, performs statistical averaging of benchmark results
-Results Average(std::vector<double> values, size_t n_warmup, size_t n_outliers) {
-  assert(values.size() > n_warmup + n_outliers * 2);
+Results Average(std::vector<double> values, double warmup_fraction, double outlier_fraction) {
+  assert(!values.empty());
+  assert(warmup_fraction >= 0.0);
+  assert(outlier_fraction >= 0.0);
+
+  // Convert fractions to the exact number of iterations
+  size_t n_warmup  = (size_t)std::round(values.size() * warmup_fraction);
+  size_t n_outliers = (size_t)std::round(values.size() * outlier_fraction);
+  n_outliers = std::min(n_outliers, values.size() - 1);
+  if (n_warmup + n_outliers >= values.size()) {
+    n_warmup = values.size() - n_outliers - 1;
+  }
+  size_t n_min_outliers = n_outliers / 2;
+  size_t n_max_outliers = n_outliers - n_min_outliers;
+  assert(values.size() > n_warmup + n_outliers);
+
+  // Average the results
   values = std::vector<double>(values.begin() + n_warmup, values.end());
   std::sort(values.begin(), values.end());
-  values = std::vector<double>(values.begin() + n_outliers, values.end() - n_outliers);
+  values = std::vector<double>(values.begin() + n_min_outliers, values.end() - n_max_outliers);
   assert(!values.empty());
 
   Results results{};
@@ -123,9 +139,18 @@ void PrintBenchmarkResults(const std::string &name, const std::string &results,
 } // unnamed namespace
 
 
-Framework::Framework(size_t n_iterations, size_t n_warmup, size_t n_outliers)
-  : n_iterations_(n_iterations), n_warmup_(n_warmup), n_outliers_(n_outliers),
-    text_stream_(null), csv_stream_(null) {
+Framework::Framework()
+  : text_stream_(null), csv_stream_(null) {
+}
+
+void Framework::ExcludeIterations(double warm_up_fraction, double outlier_fraction) {
+  if (warm_up_fraction >= 1.0 || warm_up_fraction < 0.0 ||
+      outlier_fraction >= 1.0 || outlier_fraction < 0.0 ||
+      warm_up_fraction + outlier_fraction >= 1.0) {
+     throw std::invalid_argument("Invalid fraction of warm-up and/or outliers");
+  }
+  warm_up_fraction_ = warm_up_fraction;
+  outlier_fraction_ = outlier_fraction;
 }
 
 void Framework::Run() {
@@ -141,7 +166,7 @@ void Framework::Run() {
       bench->Reset();
       while (bench->MoveNext()) {
         try {
-          auto results = Average(bench->Run(), 0, 0);
+          auto results = Average(bench->Run(), warm_up_fraction_, outlier_fraction_);
           if (!min || results.mean < min->mean) {
             min = results;
           }
