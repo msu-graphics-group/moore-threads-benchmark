@@ -1,6 +1,6 @@
 #include "Tests/Overheads.h"
 
-#include "Microbenchmarks/CudaEventBenchmark.h"
+#include "Framework/CudaEventBenchmark.h"
 
 //----------------------
 //--- cudaMallocTest ---
@@ -44,7 +44,6 @@ namespace overheads {
 
 std::unique_ptr<IMicrobenchmark<size_t>> cudaMallocTest() {
   return std::make_unique<cudaMallocImpl>();
-
 }
 
 } // namespace overheads
@@ -383,6 +382,7 @@ std::unique_ptr<IMicrobenchmark<size_t>> cudaMemcpyDeviceToDeviceTest() {
 
 namespace {
 
+// Coded by DeepSeek-v4
 struct CudaFreeHostDeleter {
   void operator()(char *ptr) const noexcept {
     if (ptr) {
@@ -406,7 +406,6 @@ class cudaMemcpyAsyncImpl: public CudaEventBenchmark<size_t> {
     }
 
     virtual void CleanUp() override {
-      HANDLE_ERROR(Api::cudaDeviceSynchronize());
       HANDLE_ERROR(Api::cudaFree(device_));
       host_.reset();
       device_ = nullptr;
@@ -604,16 +603,14 @@ class cudaEventDestroyImpl: public CudaEventBenchmark<> {
     virtual std::string Name() const override{ return "overheads::cudaEventDestroy()"; }
 
     virtual void Init() override {
-      events.reserve(SubIterations());
-      for (size_t j = 0; j < SubIterations(); j++) {
-        Api::cudaEvent_t event{};
-        HANDLE_ERROR(Api::cudaEventCreate(&event));
-        events.emplace_back(event);
+      events.resize(SubIterations());
+      for (size_t j = 0; j < events.size(); j++) {
+        HANDLE_ERROR(Api::cudaEventCreate(events.data() + j));
       }
     }
 
     virtual void SingleRun() override {
-      for (auto event : events) {
+      for (const auto &event : events) {
         HANDLE_ERROR(Api::cudaEventDestroy(event));
       }
     }

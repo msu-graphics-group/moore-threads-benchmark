@@ -1,5 +1,7 @@
 #include "DeviceInfo.h"
 
+#include "Units.h"
+
 //-------------------------------
 //--- EstimateCudaPerformance ---
 //-------------------------------
@@ -19,7 +21,7 @@ enum class NvidiaArchitecture {
   Blackwell  // 2024 (GB)
 };
 
-// Implemented by DeepSeek, reviewed by Gemini, Qwen and me
+// Coded by DeepSeek, reviewed by Gemini, Qwen and me
 // These formulas have several flaws, need to verify them with real GPUs
 std::optional<TheoreticalPerformance> EstimateCudaPerformance(const Api::cudaDeviceProp &props,
                                                               int core_clock_rate, int memory_clock_rate) {
@@ -231,59 +233,11 @@ std::optional<TheoreticalPerformance> EstimateMusaPerformance(const Api::cudaDev
 
 namespace {
 
-// Formats some value to a human-readable format with units (e.g., '42.0 MB')
-std::string ApplyUnits(size_t value, double multiplier, const std::string &units) {
+// Convertes some ration to a percentage string
+std::string ToPercentage(double fraction) {
   std::ostringstream oss;
-  oss << std::fixed << std::setprecision(2) << value * multiplier << ' ' << units;
+  oss << std::fixed << std::setprecision(1) << fraction * 100 << '%';
   return oss.str();
-}
-
-// Special version for memory sizes
-std::string ApplyBytes(size_t bytes) {
-  constexpr size_t GB = 1024 * 1024 * 1024;
-  constexpr size_t MB = 1024 * 1024;
-  constexpr size_t KB = 1024;
-
-  if (bytes >= GB) {
-    return ApplyUnits(bytes, 1.0 / GB, "GB");
-  } else if (bytes >= MB) {
-    return ApplyUnits(bytes, 1.0 / MB, "MB");
-  } else if (bytes >= KB) {
-    return ApplyUnits(bytes, 1.0 / KB, "KB");
-  } else {
-    return ApplyUnits(bytes, 1.0, "Bytes");
-  }
-}
-
-// Special version for MHz
-std::string ApplyMHz(size_t khz) {
-  return ApplyUnits(khz, 1e-3, "MHz");
-}
-
-// Special version for floating-point operations per second
-std::string ApplyFlops(uint64_t flops) {
-
-  if (flops >= 1e15) {
-    return ApplyUnits(flops, 1.0 * 1e-15, "PFlops");
-  }
-  else if (flops >= 1e12) {
-    return ApplyUnits(flops, 1.0 * 1e-12, "TFlops");
-  }
-  else if (flops >= 1e9) {
-    return ApplyUnits(flops, 1.0 * 1e-9, "GFlops");
-  }
-  else if (flops >= 1e6) {
-    return ApplyUnits(flops, 1.0 * 1e-6, "MFlops");
-  }
-  else if (flops >= 1e3) {
-    return ApplyUnits(flops, 1.0 * 1e-3, "KFlops");
-  }
-  else if (flops > 0) {
-    return ApplyUnits(flops, 1.0, "Flops");
-  }
-  else {
-    return "N/A";
-  }
 }
 
 // Returns 'yes' and 'no' instead of '1' and '0'
@@ -329,69 +283,97 @@ DeviceInfo GetDeviceInfo(int device) {
 
   // API
   params = {};
-  params.emplace_back(DeviceInfo::Parameter("Driver version", std::to_string(driverVersion)));
-  params.emplace_back(DeviceInfo::Parameter("Runtime version", std::to_string(runtimeVersion)));
+  params.emplace_back(DeviceInfo::Parameter("Driver version",
+                                            std::to_string(driverVersion)));
+  params.emplace_back(DeviceInfo::Parameter("Runtime version",
+                                            std::to_string(runtimeVersion)));
   res.parameters.emplace_back(DeviceInfo::ParameterCategory("API", std::move(params)));
 
   // Device
   params = {};
   params.emplace_back(DeviceInfo::Parameter("Compute Capability",
-                                      std::to_string(props.major) + '.' + std::to_string(props.minor)));
+                                            std::to_string(props.major) + '.' + std::to_string(props.minor)));
 #if defined(API_HIP)
-  params.emplace_back(DeviceInfo::Parameter("gcnArchName", props.gcnArchName));
+  params.emplace_back(DeviceInfo::Parameter("gcnArchName",
+                                            props.gcnArchName));
 #endif
-  params.emplace_back(DeviceInfo::Parameter("multiProcessorCount", std::to_string(props.multiProcessorCount)));
-  params.emplace_back(DeviceInfo::Parameter("clockRate", ApplyUnits(clockRate, 1e-3, "MHz")));
+  params.emplace_back(DeviceInfo::Parameter("multiProcessorCount",
+                                            std::to_string(props.multiProcessorCount)));
+  params.emplace_back(DeviceInfo::Parameter("clockRate",
+                                            ToString(clockRate * 1000, Unit::Hz)));
 #if defined(API_HIP)
-  params.emplace_back(DeviceInfo::Parameter("clockInstructionRate", ApplyUnits(props.clockInstructionRate, 1e-3, "MHz")));
+  params.emplace_back(DeviceInfo::Parameter("clockInstructionRate",
+                                            ToString(props.clockInstructionRate * 1000, Unit::Hz)));
 #endif
-  params.emplace_back(DeviceInfo::Parameter("integrated", YesOrNo(props.integrated)));
-  params.emplace_back(DeviceInfo::Parameter("concurrentKernels", YesOrNo(props.concurrentKernels)));
+  params.emplace_back(DeviceInfo::Parameter("integrated",
+                                            YesOrNo(props.integrated)));
+  params.emplace_back(DeviceInfo::Parameter("concurrentKernels",
+                                            YesOrNo(props.concurrentKernels)));
   res.parameters.emplace_back(DeviceInfo::ParameterCategory("Device", std::move(params)));
 
   // Multiprocessor
   params = {};
-  params.emplace_back(DeviceInfo::Parameter("warpSize", std::to_string(props.warpSize)));
+  params.emplace_back(DeviceInfo::Parameter("warpSize",
+                                            std::to_string(props.warpSize)));
 #if !defined(API_HIP)
   params.emplace_back(DeviceInfo::Parameter("singleToDoublePrecisionPerfRatio", std::to_string(singleToDoublePrecisionPerfRatio)));
 #endif
-  params.emplace_back(DeviceInfo::Parameter("regsPerMultiprocessor", std::to_string(props.regsPerMultiprocessor)));
-  params.emplace_back(DeviceInfo::Parameter("maxBlocksPerMultiProcessor", std::to_string(props.maxBlocksPerMultiProcessor)));
-  params.emplace_back(DeviceInfo::Parameter("sharedMemPerMultiprocessor", ApplyBytes(props.sharedMemPerMultiprocessor)));
-  params.emplace_back(DeviceInfo::Parameter("maxThreadsPerMultiProcessor", std::to_string(props.maxThreadsPerMultiProcessor)));
-  params.emplace_back(DeviceInfo::Parameter("maxSharedMemoryPerMultiProcessor", ApplyBytes(maxSharedMemoryPerMultiProcessor)));
+  params.emplace_back(DeviceInfo::Parameter("regsPerMultiprocessor",
+                                            std::to_string(props.regsPerMultiprocessor)));
+  params.emplace_back(DeviceInfo::Parameter("maxBlocksPerMultiProcessor",
+                                            std::to_string(props.maxBlocksPerMultiProcessor)));
+  params.emplace_back(DeviceInfo::Parameter("sharedMemPerMultiprocessor",
+                                            ToString(props.sharedMemPerMultiprocessor, Unit::Bytes)));
+  params.emplace_back(DeviceInfo::Parameter("maxThreadsPerMultiProcessor",
+                                            std::to_string(props.maxThreadsPerMultiProcessor)));
+  params.emplace_back(DeviceInfo::Parameter("maxSharedMemoryPerMultiProcessor",
+                                            ToString(maxSharedMemoryPerMultiProcessor, Unit::Bytes)));
   res.parameters.emplace_back(DeviceInfo::ParameterCategory("Multiprocessor", std::move(params)));
 
   // Global memory
   params = {};
-  params.emplace_back(DeviceInfo::Parameter("totalGlobalMem", ApplyBytes(props.totalGlobalMem)));
-  params.emplace_back(DeviceInfo::Parameter("memoryClockRate", ApplyUnits(memoryClockRate, 1e-3, "MHz")));
-  params.emplace_back(DeviceInfo::Parameter("memoryBusWidth", std::to_string(props.memoryBusWidth)));
-  params.emplace_back(DeviceInfo::Parameter("ECCEnabled", YesOrNo(props.ECCEnabled)));
-  params.emplace_back(DeviceInfo::Parameter("managedMemory", YesOrNo(props.managedMemory)));
-  params.emplace_back(DeviceInfo::Parameter("unifiedAddressing", YesOrNo(props.unifiedAddressing)));
-  params.emplace_back(DeviceInfo::Parameter("pageableMemoryAccess", YesOrNo(props.pageableMemoryAccess)));
+  params.emplace_back(DeviceInfo::Parameter("totalGlobalMem",
+                                            ToString(props.totalGlobalMem, Unit::Bytes)));
+  params.emplace_back(DeviceInfo::Parameter("memoryClockRate",
+                                            ToString(memoryClockRate * 1000.0, Unit::Hz)));
+  params.emplace_back(DeviceInfo::Parameter("memoryBusWidth",
+                                            std::to_string(props.memoryBusWidth)));
+  params.emplace_back(DeviceInfo::Parameter("ECCEnabled", 
+                                            YesOrNo(props.ECCEnabled)));
+  params.emplace_back(DeviceInfo::Parameter("managedMemory",
+                                            YesOrNo(props.managedMemory)));
+  params.emplace_back(DeviceInfo::Parameter("unifiedAddressing",
+                                            YesOrNo(props.unifiedAddressing)));
+  params.emplace_back(DeviceInfo::Parameter("pageableMemoryAccess",
+                                            YesOrNo(props.pageableMemoryAccess)));
   res.parameters.emplace_back(DeviceInfo::ParameterCategory("Global memory", std::move(params)));
 
   // Grid
   params = {};
   params.emplace_back(DeviceInfo::Parameter("maxGridSize",
-      std::to_string(props.maxGridSize[0]) + " x " +
-      std::to_string(props.maxGridSize[1]) + " x " +
-      std::to_string(props.maxGridSize[2])));
-  params.emplace_back(DeviceInfo::Parameter("sharedMemPerBlock", ApplyBytes(props.sharedMemPerBlock)));
-  params.emplace_back(DeviceInfo::Parameter("regsPerBlock", std::to_string(props.regsPerBlock)));
-  params.emplace_back(DeviceInfo::Parameter("maxThreadsPerBlock", std::to_string(props.maxThreadsPerBlock)));
+                                            std::to_string(props.maxGridSize[0]) + " x " +
+                                            std::to_string(props.maxGridSize[1]) + " x " +
+                                            std::to_string(props.maxGridSize[2])));
+  params.emplace_back(DeviceInfo::Parameter("sharedMemPerBlock",
+                                            ToString(props.sharedMemPerBlock, Unit::Bytes)));
+  params.emplace_back(DeviceInfo::Parameter("regsPerBlock",
+                                            std::to_string(props.regsPerBlock)));
+  params.emplace_back(DeviceInfo::Parameter("maxThreadsPerBlock",
+                                            std::to_string(props.maxThreadsPerBlock)));
   res.parameters.emplace_back(DeviceInfo::ParameterCategory("Grid", std::move(params)));
 
   // Caches
   params = {};
-  params.emplace_back(DeviceInfo::Parameter("totalConstMem", ApplyBytes(props.totalConstMem)));
-  params.emplace_back(DeviceInfo::Parameter("l2CacheSize", ApplyBytes(props.l2CacheSize)));
+  params.emplace_back(DeviceInfo::Parameter("totalConstMem",
+                                            ToString(props.totalConstMem, Unit::Bytes)));
+  params.emplace_back(DeviceInfo::Parameter("l2CacheSize",
+                                            ToString(props.l2CacheSize, Unit::Bytes)));
   params.emplace_back(DeviceInfo::Parameter("persistingL2CacheMaxSize",
-      ApplyUnits(props.persistingL2CacheMaxSize, 100.0 / props.l2CacheSize, "%")));
-  params.emplace_back(DeviceInfo::Parameter("localL1CacheSupported", YesOrNo(props.localL1CacheSupported)));
-  params.emplace_back(DeviceInfo::Parameter("globalL1CacheSupported", YesOrNo(props.globalL1CacheSupported)));
+                                            ToPercentage((double)props.persistingL2CacheMaxSize / props.l2CacheSize)));
+  params.emplace_back(DeviceInfo::Parameter("localL1CacheSupported",
+                                            YesOrNo(props.localL1CacheSupported)));
+  params.emplace_back(DeviceInfo::Parameter("globalL1CacheSupported",
+                                            YesOrNo(props.globalL1CacheSupported)));
   res.parameters.emplace_back(DeviceInfo::ParameterCategory("Caches", std::move(params)));
 
   // Now, we need to estimate the theoretical performance
@@ -406,13 +388,13 @@ DeviceInfo GetDeviceInfo(int device) {
   if (res.performance) {
     const auto &perf = res.performance.value();
     params = {};
-    params.emplace_back(DeviceInfo::Parameter("SIMT (fp16)",   ApplyFlops(perf.simt_fp16)));
-    params.emplace_back(DeviceInfo::Parameter("SIMT (fp32)",   ApplyFlops(perf.simt_fp32)));
-    params.emplace_back(DeviceInfo::Parameter("SIMT (fp64)",   ApplyFlops(perf.simt_fp64)));
-    params.emplace_back(DeviceInfo::Parameter("Tensor (fp16)", ApplyFlops(perf.tensor_fp16)));
-    params.emplace_back(DeviceInfo::Parameter("Tensor (fp32)", ApplyFlops(perf.tensor_fp32)));
-    params.emplace_back(DeviceInfo::Parameter("Tensor (fp64)", ApplyFlops(perf.tensor_fp64)));
-    params.emplace_back(DeviceInfo::Parameter("Bandwidth",     ApplyUnits(perf.memory_bandwidth, 1e-9, "GB/s")));
+    params.emplace_back(DeviceInfo::Parameter("SIMT (fp16)",   ToString(perf.simt_fp16, Unit::Flops)));
+    params.emplace_back(DeviceInfo::Parameter("SIMT (fp32)",   ToString(perf.simt_fp32, Unit::Flops)));
+    params.emplace_back(DeviceInfo::Parameter("SIMT (fp64)",   ToString(perf.simt_fp64, Unit::Flops)));
+    params.emplace_back(DeviceInfo::Parameter("Tensor (fp16)", ToString(perf.tensor_fp16, Unit::Flops)));
+    params.emplace_back(DeviceInfo::Parameter("Tensor (fp32)", ToString(perf.tensor_fp32, Unit::Flops)));
+    params.emplace_back(DeviceInfo::Parameter("Tensor (fp64)", ToString(perf.tensor_fp64, Unit::Flops)));
+    params.emplace_back(DeviceInfo::Parameter("Bandwidth",     ToString(perf.memory_bandwidth, Unit::BytesPerSecond)));
     res.parameters.emplace_back(DeviceInfo::ParameterCategory("Performance", std::move(params)));
   }
 

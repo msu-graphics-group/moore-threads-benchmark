@@ -72,6 +72,10 @@ struct Musa {
     return ::musaDeviceSynchronize();
   }
 
+  static cudaError_t cudaDeviceReset() {
+    return ::musaDeviceReset();
+  }
+
   //--------------
   //--- Memory ---
   //--------------

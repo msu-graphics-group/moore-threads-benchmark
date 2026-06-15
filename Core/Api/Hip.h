@@ -73,6 +73,10 @@ struct Hip {
     return ::hipDeviceSynchronize();
   }
 
+  static cudaError_t cudaDeviceReset() {
+    return ::hipDeviceReset();
+  }
+
   //--------------
   //--- Memory ---
   //--------------
