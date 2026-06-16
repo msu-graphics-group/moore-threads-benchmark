@@ -71,7 +71,37 @@ void PopulateBandwidth(Framework &framework) {
   std::vector<size_t> block_sizes = { 1024 * 1024 };
 
   framework.AddBenchmark(std::move(bandwidth::cudaRuntimeTest()),
-                         block_sizes, 100, 100, Unit::BytesPerSecond, ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::cudaMemcpyHostToDeviceTest()),
+                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::cudaMemcpyDeviceToHostTest()),
+                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::cudaMemcpyDeviceToDeviceTest()),
+                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::cudaMemcpyPinnedHostToDeviceTest()),
+                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::cudaMemcpyPinnedDeviceToHostTest()),
+                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::cudaMemcpyManagedToDeviceTest()),
+                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::cudaMemcpyDeviceToManagedTest()),
+                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
 #if defined(API_CUDA)
   framework.AddBenchmark(std::move(bandwidth::cudaKernelTest()),
                          100, 100, Unit::Seconds, ToSeconds, WhoIsBetter::HigherIsBetter);
