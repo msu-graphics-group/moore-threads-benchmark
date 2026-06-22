@@ -2,34 +2,6 @@
 
 #include "Framework/CudaEventBenchmark.h"
 
-//-----------------------
-//--- cudaRuntimeTest ---
-//-----------------------
-
-namespace {
-
-class cudaRuntimeImpl : public CudaEventBenchmark<size_t> {
-  public:
-    cudaRuntimeImpl() = default;
-
-    virtual std::string Name() const override { return "bandwidth::cudaRuntime()"; }
-
-    virtual void SingleRun() override {
-      std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-};
-
-} // unnamed namespace
-
-
-namespace bandwidth {
-
-std::unique_ptr<IMicrobenchmark<size_t>> cudaRuntimeTest() {
-  return std::make_unique<cudaRuntimeImpl>();
-}
-
-} // namespace bandwidth
-
 //----------------------
 //--- cudaMemcpyTest ---
 //----------------------
@@ -135,7 +107,7 @@ namespace {
 struct CudaFreeHostDeleter {
   void operator()(char *ptr) const noexcept {
     if (ptr) {
-      Api::cudaFreeHost(ptr);
+      HANDLE_ERROR(Api::cudaFreeHost(ptr));
     }
   }
 };
@@ -181,7 +153,7 @@ class cudaMemcpyPinnedHostToDeviceImpl: public cudaMemcpyPinnedImpl {
     }
 };
 
-//Device To Host
+// Device To Host
 class cudaMemcpyPinnedDeviceToHostImpl: public cudaMemcpyPinnedImpl {
   public:
     cudaMemcpyPinnedDeviceToHostImpl() = default;

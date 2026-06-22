@@ -70,10 +70,6 @@ void PopulateBandwidth(Framework &framework) {
   framework.SetTag("Bandwidth");
   std::vector<size_t> block_sizes = { 1024 * 1024 };
 
-  framework.AddBenchmark(std::move(bandwidth::cudaRuntimeTest()),
-                         block_sizes, 100, 100, Unit::BytesPerSecond,
-                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
-
   framework.AddBenchmark(std::move(bandwidth::cudaMemcpyHostToDeviceTest()),
                          block_sizes, 100, 100, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
