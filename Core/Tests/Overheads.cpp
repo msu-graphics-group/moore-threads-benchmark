@@ -175,11 +175,8 @@ class cudaMemsetImpl: public CudaEventBenchmark<size_t> {
     }
 
     virtual void SingleRun() override {
-      auto block_size = std::get<0>(Args());
-      assert(block_size > 1);
-
       for (size_t j = 0; j < SubIterations(); j++) {
-        HANDLE_ERROR(Api::cudaMemset(device_ + (rand() % (block_size - 1)), 0, 1));
+        HANDLE_ERROR(Api::cudaMemset(device_ + RandomOffset(Args()), 0, 1));
       }
     }
 
@@ -189,7 +186,7 @@ class cudaMemsetImpl: public CudaEventBenchmark<size_t> {
     }
 
   private:
-    char *device_{};
+    std::byte *device_{};
 };
 
 } // unnamed namespace
@@ -216,7 +213,7 @@ class cudaMemcpyImpl: public CudaEventBenchmark<size_t> {
 
     virtual void Init() override{
       auto block_size = std::get<0>(Args());
-      host_ = std::make_unique<char[]>(block_size);
+      host_ = std::make_unique<std::byte[]>(block_size);
       HANDLE_ERROR(Api::cudaMalloc(&device_src_, block_size));
       HANDLE_ERROR(Api::cudaMalloc(&device_dst_, block_size));
     }
@@ -231,9 +228,9 @@ class cudaMemcpyImpl: public CudaEventBenchmark<size_t> {
     }
 
   protected:  
-    std::unique_ptr<char[]> host_;
-    char *device_src_{};
-    char *device_dst_{};
+    std::unique_ptr<std::byte[]> host_;
+    std::byte *device_src_{};
+    std::byte *device_dst_{};
 };
 
 // Host to Device
@@ -311,7 +308,7 @@ namespace {
 
 // Coded by DeepSeek-v4
 struct CudaFreeHostDeleter {
-  void operator()(char *ptr) const noexcept {
+  void operator()(std::byte *ptr) const {
     if (ptr) {
       HANDLE_ERROR(Api::cudaFreeHost(ptr));
     }
@@ -324,7 +321,7 @@ class PinnedMemoryBenchmark: public CudaEventBenchmark<size_t> {
 
     virtual void Init() override {
       auto block_size = std::get<0>(Args());
-      char *host{};
+      std::byte *host{};
       HANDLE_ERROR(Api::cudaHostAlloc(&host, block_size, Api::cudaHostAllocDefault));
       host_.reset(host);
       HANDLE_ERROR(Api::cudaMalloc(&device_, block_size));
@@ -337,8 +334,8 @@ class PinnedMemoryBenchmark: public CudaEventBenchmark<size_t> {
     }
 
   protected:
-    std::unique_ptr<char, CudaFreeHostDeleter> host_{};
-    char *device_{};
+    std::unique_ptr<std::byte, CudaFreeHostDeleter> host_{};
+    std::byte *device_{};
 };
 
 // Host to Device, async
@@ -569,7 +566,8 @@ std::unique_ptr<IMicrobenchmark<>> cudaEventRecordTest() {
 //---------------------------------
 
 namespace {
-class cudaDeviceSynchronizeImpl: public CudaEventBenchmark<> {
+
+class cudaDeviceSynchronizeImpl : public CudaEventBenchmark<> {
   public:
     cudaDeviceSynchronizeImpl() = default;
 
@@ -588,6 +586,54 @@ namespace overheads {
 
 std::unique_ptr<IMicrobenchmark<>> cudaDeviceSynchronizeTest() {
   return std::make_unique<cudaDeviceSynchronizeImpl>();
+}
+
+} // namespace overheads
+
+
+//---------------------------
+//--- cudaDeviceResetTest ---
+//---------------------------
+
+namespace {
+
+class cudaDeviceResetImpl : public IMicrobenchmark<> {
+  public:
+    cudaDeviceResetImpl() = default;
+
+    virtual std::string Name() const override { return "overheads::cudaDeviceReset()"; }
+
+    virtual void Configure(size_t iterations, size_t sub_iterations) override {
+      assert(iterations >= 1);
+      if (sub_iterations != 1) {
+        throw std::invalid_argument("The number of sub-iterations must be equal to one");
+      }
+      iterations_ = iterations;
+    }
+
+    virtual std::vector<double> Run() override {
+      using clock = std::chrono::steady_clock;
+
+      std::vector<double> times;
+      times.reserve(iterations_);
+      for (size_t i = 0; i < iterations_; ++i) {
+        auto start = clock::now();
+        HANDLE_ERROR(Api::cudaDeviceReset());
+        times.emplace_back(std::chrono::duration<double>(clock::now() - start).count());
+      }
+      return times;
+    }
+
+  private:
+    size_t iterations_{};
+};
+
+} // unnamed namespace
+
+namespace overheads {
+
+std::unique_ptr<IMicrobenchmark<>> cudaDeviceResetTest() {
+  return std::make_unique<cudaDeviceResetImpl>();
 }
 
 } // namespace overheads

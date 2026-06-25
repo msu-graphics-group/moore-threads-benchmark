@@ -40,5 +40,7 @@ std::unique_ptr<IMicrobenchmark<>> cudaEventRecordTest();
 
 std::unique_ptr<IMicrobenchmark<>> cudaDeviceSynchronizeTest();
 
+std::unique_ptr<IMicrobenchmark<>> cudaDeviceResetTest();
+
 
 } // namespace overheads

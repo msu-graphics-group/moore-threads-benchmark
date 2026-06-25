@@ -3,7 +3,7 @@
 
 // Just a classical microbenchmark
 // Some external framework will call it and analyze its results
-template<typename ...ARGS>
+template <typename... ARGS>
 class IMicrobenchmark {
   public:
     IMicrobenchmark(const IMicrobenchmark &) = delete;

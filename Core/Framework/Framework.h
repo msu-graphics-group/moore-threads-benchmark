@@ -78,14 +78,13 @@ class Framework {
     // Coded by DeepSeek-v4
     void AddBenchmark(std::unique_ptr<IMicrobenchmark<>> &&benchmark,
                       size_t iterations, size_t sub_iterations,
-                      Unit units, const std::function<double(double)> &seconds_to_units,
-                      WhoIsBetter better) {
+                      Unit units, const std::function<double(double)> &seconds_to_units) {
       assert(iterations != 0);
       assert(sub_iterations != 0);
       std::vector<std::tuple<>> configs(1);
       auto sealed_benchmark = std::unique_ptr<ISealedBenchmark>(
         new SealedBenchmark<>(std::move(benchmark), configs,
-                              iterations, sub_iterations, units, seconds_to_units, better));
+                              iterations, sub_iterations, units, seconds_to_units, WhoIsBetter::NeedMinMax));
       benchmarks_[current_tag_].emplace_back(std::move(sealed_benchmark));
     }
 

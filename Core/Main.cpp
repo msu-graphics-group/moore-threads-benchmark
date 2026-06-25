@@ -22,11 +22,11 @@ void PopulateOverheads(Framework &framework) {
 
   // Events
   framework.AddBenchmark(std::move(overheads::cudaEventCreateTest()),
-                         100, 32, Unit::Seconds, to_seconds_v1, WhoIsBetter::NeedMinMax);
+                         100, 32, Unit::Seconds, to_seconds_v1);
   framework.AddBenchmark(std::move(overheads::cudaEventRecordTest()),
-                         100, 32, Unit::Seconds, to_seconds_v1, WhoIsBetter::NeedMinMax);
+                         100, 32, Unit::Seconds, to_seconds_v1);
   framework.AddBenchmark(std::move(overheads::cudaEventDestroyTest()),
-                         100, 32, Unit::Seconds, to_seconds_v1, WhoIsBetter::NeedMinMax);
+                         100, 32, Unit::Seconds, to_seconds_v1);
 
   // Memory allocation
   framework.AddBenchmark(std::move(overheads::cudaMallocTest()), block_sizes,
@@ -63,7 +63,10 @@ void PopulateOverheads(Framework &framework) {
 
   // Device
   framework.AddBenchmark(std::move(overheads::cudaDeviceSynchronizeTest()),
-                         100, 100, Unit::Seconds, to_seconds_v1, WhoIsBetter::NeedMinMax);
+                         100, 100, Unit::Seconds, to_seconds_v1);
+  framework.AddBenchmark(std::move(overheads::cudaDeviceResetTest()),
+                         100, 1, Unit::Seconds, to_seconds_v1);
+                         
 }
 
 void PopulateBandwidth(Framework &framework) {
