@@ -2,40 +2,60 @@
 
 #include "Framework/CudaEventBenchmark.h"
 
-//----------------------
-//--- cudaMallocTest ---
-//----------------------
+
+using cudaMallocType = Api::cudaError_t (*)(void **ptr, size_t size);
+using cudaFreeType   = Api::cudaError_t (*)(void *ptr);
 
 namespace {
 
-class cudaMallocImpl : public CudaEventBenchmark<size_t> {
-  public:
-    cudaMallocImpl() = default;
+size_t RandomOffset(const std::tuple<size_t> &args) {
+  auto block_size = std::get<0>(args);
+  assert(block_size > 1);
+  return rand() % (block_size - 1);
+}
 
-    virtual std::string Name() const override { return "overheads::cudaMalloc()"; }
+} // unnamed namespace
+
+//-----------------------
+//--- MallocBenchmark ---
+//-----------------------
+
+namespace {
+
+template <typename AllocFn, typename FreeFn>
+class MallocBenchmark : public CudaEventBenchmark<size_t> {
+  public:
+    MallocBenchmark(const std::string &name, AllocFn alloc_fn, FreeFn free_fn)
+      : name_(name), alloc_(alloc_fn), free_(free_fn) {
+    }
+
+    virtual std::string Name() const override { return name_; }
 
     virtual void Init() override {
-      allocations.reserve(SubIterations());
+      allocations_.reserve(SubIterations());
     }
 
     virtual void SingleRun() override {
       auto block_size = std::get<0>(Args());
       for (size_t j = 0; j < SubIterations(); j++) {
         void *ptr{};
-        HANDLE_ERROR(Api::cudaMalloc(&ptr, block_size));
-        allocations.emplace_back(ptr);
+        HANDLE_ERROR(alloc_(&ptr, block_size));
+        allocations_.emplace_back(ptr);
       }
     }
 
     virtual void CleanUp() override {
-      for (auto ptr : allocations) {
-        HANDLE_ERROR(Api::cudaFree(ptr));
+      for (auto ptr : allocations_) {
+        HANDLE_ERROR(free_(ptr));
       }
-      allocations.clear();
+      allocations_.clear();
     }
 
   private:
-    std::vector<void *> allocations;
+    std::string name_;
+    AllocFn alloc_;
+    FreeFn free_;
+    std::vector<void *> allocations_;
 };
 
 } // unnamed namespace
@@ -43,134 +63,72 @@ class cudaMallocImpl : public CudaEventBenchmark<size_t> {
 namespace overheads {
 
 std::unique_ptr<IMicrobenchmark<size_t>> cudaMallocTest() {
-  return std::make_unique<cudaMallocImpl>();
+  return std::unique_ptr<IMicrobenchmark<size_t>>(
+    new MallocBenchmark<cudaMallocType, cudaFreeType>(
+      "overheads::cudaMalloc()",
+      Api::cudaMalloc,
+      Api::cudaFree)
+  );
 }
-
-} // namespace overheads
-
-//-----------------------------
-//--- cudaMallocManagedTest ---
-//-----------------------------
-
-namespace {
-
-class cudaMallocManagedImpl: public CudaEventBenchmark<size_t> {
-  public:
-    cudaMallocManagedImpl() = default;
-
-    virtual std::string Name() const override { return "overheads::cudaMallocManaged()"; }
-
-    virtual void Init() override {
-      allocations.reserve(SubIterations());
-    }
-
-    virtual void SingleRun() override {
-      auto block_size = std::get<0>(Args());
-      for(size_t j = 0; j < SubIterations(); j++) {
-        void *ptr{};
-        HANDLE_ERROR(Api::cudaMallocManaged(&ptr, block_size));
-        allocations.emplace_back(ptr);
-      }
-    }
-
-    virtual void CleanUp() override {
-      for(auto ptr : allocations) {
-        HANDLE_ERROR(Api::cudaFree(ptr));
-      }
-      allocations.clear();
-    }
-
-  private:
-    std::vector<void *> allocations;
-};
-
-} // unnamed namespace
-
-namespace overheads {
 
 std::unique_ptr<IMicrobenchmark<size_t>> cudaMallocManagedTest() {
-  return std::make_unique<cudaMallocManagedImpl>();
+  return std::unique_ptr<IMicrobenchmark<size_t>>(
+    new MallocBenchmark<cudaMallocType, cudaFreeType>(
+      "overheads::cudaMallocManaged()",
+      Api::cudaMallocManaged,
+      Api::cudaFree)
+  );
+}
+
+std::unique_ptr<IMicrobenchmark<size_t>> cudaHostAllocTest() {
+  return std::unique_ptr<IMicrobenchmark<size_t>>(
+    new MallocBenchmark(
+      "overheads::cudaHostAlloc()",
+      [](void **ptr, size_t size) { return Api::cudaHostAlloc(ptr, size, Api::cudaHostAllocDefault); },
+      [](void *ptr) { return Api::cudaFreeHost(ptr); })
+  );
 }
 
 } // namespace overheads
 
-//-------------------------
-//--- cudaHostAllocTest ---
-//-------------------------
+
+//---------------------
+//--- FreeBenchmark ---
+//---------------------
 
 namespace {
 
-class cudaHostAllocImpl: public CudaEventBenchmark<size_t> {
+template <typename AllocFn, typename FreeFn>
+class FreeBenchmark : public CudaEventBenchmark<size_t> {
   public:
-    cudaHostAllocImpl() = default;
-
-    virtual std::string Name() const override { return "overheads::cudaHostAlloc()"; }
-
-    virtual void Init() override {
-      allocations.reserve(SubIterations());
+    FreeBenchmark(const std::string &name, AllocFn alloc_fn, FreeFn free_fn)
+      : name_(name), alloc_(alloc_fn), free_(free_fn) {
     }
 
-    virtual void SingleRun() override {
-      auto block_size = std::get<0>(Args());
-      for(size_t j = 0; j < SubIterations(); j++) {
-        void *ptr{};
-        HANDLE_ERROR(Api::cudaHostAlloc(&ptr, block_size, Api::cudaHostAllocDefault));
-        allocations.emplace_back(ptr);
-      }
-    }
-
-    virtual void CleanUp() override {
-      for(auto ptr : allocations) {
-        HANDLE_ERROR(Api::cudaFreeHost(ptr));
-      }
-      allocations.clear();
-    }
-
-  private:
-    std::vector<void *> allocations;
-};
-
-} // unnamed namespace
-
-namespace overheads {
-
-std::unique_ptr<IMicrobenchmark<size_t>> cudaHostAllocTest() {
-  return std::make_unique<cudaHostAllocImpl>();
-}
-
-} //namespace overheads
-
-//--------------------
-//--- cudaFreeTest ---
-//--------------------
-
-namespace {
-
-class cudaFreeImpl : public CudaEventBenchmark<size_t> {
-  public:
-    cudaFreeImpl() = default;
-
-    virtual std::string Name() const override { return "overheads::cudaFree()"; }
+    virtual std::string Name() const override { return name_; }
 
     virtual void Init() override {
       auto block_size = std::get<0>(Args());
       for (size_t i = 0; i < SubIterations(); i++) {
         void *ptr{};
-        HANDLE_ERROR(Api::cudaMalloc(&ptr, block_size));
-        allocations.emplace_back(ptr);
+        HANDLE_ERROR(alloc_(&ptr, block_size));
+        allocations_.emplace_back(ptr);
       }
     }
 
     virtual void SingleRun() override {
-      for (auto ptr : allocations) {
-        HANDLE_ERROR(Api::cudaFree(ptr));
+      for (auto ptr : allocations_) {
+        HANDLE_ERROR(free_(ptr));
       }
     }
 
-    virtual void CleanUp() override { allocations.clear(); }
+    virtual void CleanUp() override { allocations_.clear(); }
 
   private:
-    std::vector<void *> allocations;
+    std::string name_;
+    AllocFn alloc_;
+    FreeFn free_;
+    std::vector<void *> allocations_;
 };
 
 } // unnamed namespace
@@ -179,55 +137,25 @@ class cudaFreeImpl : public CudaEventBenchmark<size_t> {
 namespace overheads {
 
 std::unique_ptr<IMicrobenchmark<size_t>> cudaFreeTest() {
-  return std::make_unique<cudaFreeImpl>();
+  return std::unique_ptr<IMicrobenchmark<size_t>>(
+    new FreeBenchmark<cudaMallocType, cudaFreeType>(
+      "overheads::cudaFree()",
+      Api::cudaMalloc,
+      Api::cudaFree)
+  );
 }
-
-} // namespace overheads
-
-//------------------------
-//--- cudaFreeHostTest ---
-//------------------------
-
-namespace {
-
-class cudaFreeHostImpl: public CudaEventBenchmark<size_t> {
-  public:
-    cudaFreeHostImpl() = default;
-
-    virtual std::string Name() const override { return "overheads::cudaFreeHost()"; }
-
-    virtual void Init() override {
-      auto block_size = std::get<0>(Args());
-      for(size_t i = 0; i < SubIterations(); i ++) {
-        void *ptr{};
-        HANDLE_ERROR(Api::cudaHostAlloc(&ptr, block_size, Api::cudaHostAllocDefault));
-        allocations.emplace_back(ptr);
-      }
-    }
-
-    virtual void SingleRun() override {
-      for (auto ptr : allocations){
-        HANDLE_ERROR(Api::cudaFreeHost(ptr));
-      }
-    }
-
-    virtual void CleanUp() override {
-      allocations.clear();
-    }
-
-    private:
-      std::vector<void *> allocations;
-};
-
-} // unnamed namespace
-
-namespace overheads {
 
 std::unique_ptr<IMicrobenchmark<size_t>> cudaFreeHostTest() {
-  return std::make_unique<cudaFreeHostImpl>();
+  return std::unique_ptr<IMicrobenchmark<size_t>>(
+    new FreeBenchmark(
+      "overheads::cudaFreeHost()",
+      [](void **ptr, size_t size) { return Api::cudaHostAlloc(ptr, size, Api::cudaHostAllocDefault); },
+      [](void *ptr) { return Api::cudaFreeHost(ptr); })
+  );
 }
 
 } // namespace overheads
+
 
 //----------------------
 //--- cudaMemsetTest ---
@@ -274,14 +202,15 @@ std::unique_ptr<IMicrobenchmark<size_t>> cudaMemsetTest() {
 
 } // namespace overheads
 
+
 //----------------------
 //--- cudaMemcpyTest ---
 //----------------------
 
 namespace {
 
-// Public base
-class cudaMemcpyImpl: public CudaEventBenchmark<size_t>{
+// Base class for cudaMemcpy benchmarks
+class cudaMemcpyImpl: public CudaEventBenchmark<size_t> {
   public:
     cudaMemcpyImpl() = default;
 
@@ -301,16 +230,10 @@ class cudaMemcpyImpl: public CudaEventBenchmark<size_t>{
       device_dst_ = nullptr;
     }
 
-  protected:
-    size_t RandomOffset() const {
-      auto block_size = std::get<0>(Args());
-      assert(block_size > 1);
-      return rand() % (block_size - 1);
-    }
-  
+  protected:  
     std::unique_ptr<char[]> host_;
-    char *device_src_ {};
-    char *device_dst_ {};
+    char *device_src_{};
+    char *device_dst_{};
 };
 
 // Host to Device
@@ -318,12 +241,13 @@ class cudaMemcpyHostToDeviceImpl: public cudaMemcpyImpl {
   public:
     cudaMemcpyHostToDeviceImpl() = default;
 
-    virtual std::string Name() const override { return "overheads::cudaMemcpyHostToDevice()"; }
+    virtual std::string Name() const override { return "overheads::cudaMemcpy()::host->device"; }
 
     virtual void SingleRun() override {
       for(size_t j = 0; j < SubIterations(); j++){
-        HANDLE_ERROR(Api::cudaMemcpy(device_dst_ + RandomOffset(), host_.get() + RandomOffset(), 1,
-                                     Api::cudaMemcpyHostToDevice));
+        HANDLE_ERROR(Api::cudaMemcpy(device_dst_ + RandomOffset(Args()),
+                                     host_.get() + RandomOffset(Args()),
+                                     1, Api::cudaMemcpyHostToDevice));
       }
     }
 };
@@ -333,12 +257,13 @@ class cudaMemcpyDeviceToHostImpl: public cudaMemcpyImpl {
   public:
     cudaMemcpyDeviceToHostImpl() = default;
 
-    virtual std::string Name() const override { return "overheads::cudaMemcpyDeviceToHost()"; }
+    virtual std::string Name() const override { return "overheads::cudaMemcpy()::device->host"; }
 
     virtual void SingleRun() override {
       for(size_t j = 0; j < SubIterations(); j++){
-        HANDLE_ERROR(Api::cudaMemcpy(host_.get() + RandomOffset(), device_src_ + RandomOffset(), 1,
-                                     Api::cudaMemcpyDeviceToHost));
+        HANDLE_ERROR(Api::cudaMemcpy(host_.get() + RandomOffset(Args()),
+                                     device_src_ + RandomOffset(Args()),
+                                     1, Api::cudaMemcpyDeviceToHost));
       }
     }
 };
@@ -348,12 +273,13 @@ class cudaMemcpyDeviceToDeviceImpl: public cudaMemcpyImpl {
   public:
     cudaMemcpyDeviceToDeviceImpl() = default;
 
-    virtual std::string Name() const override { return "overheads::cudaMemcpyDeviceToDevice()";}
+    virtual std::string Name() const override { return "overheads::cudaMemcpy()::device->device"; }
 
     virtual void SingleRun() override {
       for(size_t j = 0; j < SubIterations(); j++){
-        HANDLE_ERROR(Api::cudaMemcpy(device_dst_ + RandomOffset(), device_src_ + RandomOffset(), 1,
-                                    Api::cudaMemcpyDeviceToDevice));
+        HANDLE_ERROR(Api::cudaMemcpy(device_dst_ + RandomOffset(Args()),
+                                     device_src_ + RandomOffset(Args()),
+                                     1, Api::cudaMemcpyDeviceToDevice));
       }
     }
 };
@@ -376,9 +302,10 @@ std::unique_ptr<IMicrobenchmark<size_t>> cudaMemcpyDeviceToDeviceTest() {
 
 } // namespace overheads
 
-//---------------------------
-//--- cudaMemcpyAsyncTest ---
-//---------------------------
+
+//-----------------------------
+//--- PinnedMemoryBenchmark ---
+//-----------------------------
 
 namespace {
 
@@ -391,11 +318,9 @@ struct CudaFreeHostDeleter {
   }
 };
 
-using PinnedHostPtr = std::unique_ptr<char, CudaFreeHostDeleter>;
-
-class cudaMemcpyAsyncImpl: public CudaEventBenchmark<size_t> {
+class PinnedMemoryBenchmark: public CudaEventBenchmark<size_t> {
   public:
-    cudaMemcpyAsyncImpl() = default;
+    PinnedMemoryBenchmark() = default;
 
     virtual void Init() override {
       auto block_size = std::get<0>(Args());
@@ -412,42 +337,70 @@ class cudaMemcpyAsyncImpl: public CudaEventBenchmark<size_t> {
     }
 
   protected:
-    size_t RandomOffset() const {
-      auto block_size = std::get<0>(Args());
-      assert(block_size > 1);
-      return rand() % (block_size - 1);
-    }
-
-    PinnedHostPtr host_;
+    std::unique_ptr<char, CudaFreeHostDeleter> host_{};
     char *device_{};
 };
 
-// Host to Device
-class cudaMemcpyAsyncHostToDeviceImpl: public cudaMemcpyAsyncImpl {
+// Host to Device, async
+class cudaMemcpyAsyncHostToDeviceImpl: public PinnedMemoryBenchmark {
   public:
     cudaMemcpyAsyncHostToDeviceImpl() = default;
 
-    virtual std::string Name() const override { return"overheads::cudaMemcpyAsyncHostToDevice()";}
+    virtual std::string Name() const override { return"overheads::cudaMemcpyAsync()::host->device"; }
 
     virtual void SingleRun() override {
       for(size_t j = 0; j < SubIterations(); j++) {
-        HANDLE_ERROR(Api::cudaMemcpyAsync(device_ + RandomOffset(), host_.get() + RandomOffset(), 1,
-                                          Api::cudaMemcpyHostToDevice));
+        HANDLE_ERROR(Api::cudaMemcpyAsync(device_ + RandomOffset(Args()),
+                                          host_.get() + RandomOffset(Args()),
+                                          1, Api::cudaMemcpyHostToDevice));
       }
     }
 };
 
-// Device to Host
-class cudaMemcpyAsyncDeviceToHostImpl: public cudaMemcpyAsyncImpl {
+// Device to Host, async
+class cudaMemcpyAsyncDeviceToHostImpl: public PinnedMemoryBenchmark {
   public:
     cudaMemcpyAsyncDeviceToHostImpl() = default;
 
-    virtual std::string Name() const override { return"overheads::cudaMemcpyAsyncDeviceToHost()";}
+    virtual std::string Name() const override { return"overheads::cudaMemcpyAsync()::device->host";}
 
     virtual void SingleRun() override {
       for(size_t j = 0; j < SubIterations(); j++) {
-        HANDLE_ERROR(Api::cudaMemcpyAsync(host_.get() + RandomOffset(), device_ + RandomOffset(), 1,
-                                          Api::cudaMemcpyDeviceToHost));
+        HANDLE_ERROR(Api::cudaMemcpyAsync(host_.get() + RandomOffset(Args()),
+                                          device_ + RandomOffset(Args()),
+                                          1, Api::cudaMemcpyDeviceToHost));
+      }
+    }
+};
+
+// Host To Device, sync
+class cudaMemcpyPinnedHostToDeviceImpl: public PinnedMemoryBenchmark {
+  public:
+    cudaMemcpyPinnedHostToDeviceImpl() = default;
+
+    virtual std::string Name() const override { return"overheads::cudaMemcpy()::pinned::host->device"; }
+
+    virtual void SingleRun() override {
+      for (size_t j = 0; j < SubIterations(); j++) {
+        HANDLE_ERROR(Api::cudaMemcpy(device_ + RandomOffset(Args()),
+                                     host_.get() + RandomOffset(Args()), 1,
+                                     Api::cudaMemcpyHostToDevice));
+      }
+    }
+};
+
+// Device To Host, sync
+class cudaMemcpyPinnedDeviceToHostImpl: public PinnedMemoryBenchmark {
+  public:
+    cudaMemcpyPinnedDeviceToHostImpl() = default;
+
+    virtual std::string Name() const override { return"overheads::cudaMemcpy()::pinned::device->host"; }
+
+    virtual void SingleRun() override {
+      for (size_t j = 0; j < SubIterations(); j++) {
+        HANDLE_ERROR(Api::cudaMemcpy(host_.get() + RandomOffset(Args()),
+                                     device_ + RandomOffset(Args()), 1,
+                                     Api::cudaMemcpyDeviceToHost));
       }
     }
 };
@@ -464,77 +417,6 @@ std::unique_ptr<IMicrobenchmark<size_t>> cudaMemcpyAsyncDeviceToHostTest() {
   return std::make_unique<cudaMemcpyAsyncDeviceToHostImpl>();
 }
 
-} // namespace overheads
-
-//----------------------------
-//--- cudaMemcpyPinnedTest ---
-//----------------------------
-
-namespace {
-
-class cudaMemcpyPinnedImpl: public CudaEventBenchmark<size_t> {
-  public:
-    cudaMemcpyPinnedImpl() = default;
-
-    virtual void Init() override {
-      auto block_size = std::get<0>(Args());
-      char *host{};
-      HANDLE_ERROR(Api::cudaHostAlloc(&host, block_size, Api::cudaHostAllocDefault));
-      host_.reset(host);
-      HANDLE_ERROR(Api::cudaMalloc(&device_, block_size));
-    }
-
-    virtual void CleanUp() override {
-      HANDLE_ERROR(Api::cudaFree(device_));
-      host_.reset();
-      device_ = nullptr;
-    }
-
-  protected:
-    size_t RandomOffset() const {
-      auto block_size = std::get<0>(Args());
-      assert(block_size > 1);
-      return rand() % (block_size - 1);
-    }
-
-    PinnedHostPtr host_;
-    char *device_{};
-};
-
-// Host To Device
-class cudaMemcpyPinnedHostToDeviceImpl: public cudaMemcpyPinnedImpl {
-  public:
-    cudaMemcpyPinnedHostToDeviceImpl() = default;
-
-    virtual std::string Name() const override { return"overheads::cudaMemcpyPinnedHostToDevice()"; }
-
-    virtual void SingleRun() override {
-      for (size_t j = 0; j < SubIterations(); j++) {
-        HANDLE_ERROR(Api::cudaMemcpy(device_ + RandomOffset(), host_.get() + RandomOffset(), 1,
-                                     Api::cudaMemcpyHostToDevice));
-      }
-    }
-};
-
-//Device To Host
-class cudaMemcpyPinnedDeviceToHostImpl: public cudaMemcpyPinnedImpl {
-  public:
-    cudaMemcpyPinnedDeviceToHostImpl() = default;
-
-    virtual std::string Name() const override { return"overheads::cudaMemcpyPinnedDeviceToHost()"; }
-
-    virtual void SingleRun() override {
-      for (size_t j = 0; j < SubIterations(); j++) {
-        HANDLE_ERROR(Api::cudaMemcpy(host_.get() + RandomOffset(), device_ + RandomOffset(), 1,
-                                     Api::cudaMemcpyDeviceToHost));
-      }
-    }
-};
-
-} // unnamed namespace
-
-namespace overheads {
-
 std::unique_ptr<IMicrobenchmark<size_t>> cudaMemcpyPinnedHostToDeviceTest() {
   return std::make_unique<cudaMemcpyPinnedHostToDeviceImpl>();
 }
@@ -544,6 +426,7 @@ std::unique_ptr<IMicrobenchmark<size_t>> cudaMemcpyPinnedDeviceToHostTest() {
 }
 
 } // namespace overheads
+
 
 //---------------------------
 //--- cudaEventCreateTest ---
