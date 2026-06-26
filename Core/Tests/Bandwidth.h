@@ -24,4 +24,10 @@ std::unique_ptr<IMicrobenchmark<size_t>> cudaMemcpyDeviceToManagedTest();
 
 std::unique_ptr<IMicrobenchmark<>> cudaKernelTest();
 
+std::unique_ptr<IMicrobenchmark<size_t>> sharedMemoryReadTest();
+
+std::unique_ptr<IMicrobenchmark<size_t>> sharedMemoryWriteTest();
+
+std::unique_ptr<IMicrobenchmark<size_t>> constantMemoryReadTest();
+
 } // namespace bandwidth

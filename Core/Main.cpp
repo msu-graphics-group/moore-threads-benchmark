@@ -69,6 +69,7 @@ void PopulateOverheads(Framework &framework) {
 void PopulateBandwidth(Framework &framework) {
   framework.SetTag("Bandwidth");
   std::vector<size_t> block_sizes = { 1024 * 1024 };
+  std::vector<size_t> kernel_block_sizes = { size_t(1024) * 1024 * 1024 };
 
   framework.AddBenchmark(std::move(bandwidth::cudaMemcpyHostToDeviceTest()),
                          block_sizes, 100, 100, Unit::BytesPerSecond,
@@ -101,6 +102,18 @@ void PopulateBandwidth(Framework &framework) {
 #if defined(API_CUDA)
   framework.AddBenchmark(std::move(bandwidth::cudaKernelTest()),
                          100, 100, Unit::Seconds, ToSeconds, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::sharedMemoryReadTest()),
+                         kernel_block_sizes, 100, 100, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::sharedMemoryWriteTest()),
+                         kernel_block_sizes, 100, 100, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::constantMemoryReadTest()),
+                         kernel_block_sizes, 100, 100, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 #endif
 }
 
