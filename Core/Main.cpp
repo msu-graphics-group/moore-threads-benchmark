@@ -17,7 +17,11 @@ constexpr size_t MAX_ALLOCATED_MEMORY = (size_t)1024 * 1024 * 1024;
 
 // How many block sizes we want to generate per each test?
 // Some tests may increase or decrease this number
-constexpr size_t DEFAULT_NUMBER_OF_BLOCK_SIZES = 100;
+constexpr size_t DEFAULT_NUMBER_OF_BLOCK_SIZES = 40;
+
+// How many iterations we want to run per each combination of test and block size?
+// Does not include subiterations
+constexpr size_t DEFAULT_NUBER_OF_ITERATIONS = 5;
 
 
 
@@ -37,15 +41,15 @@ std::vector<size_t> SpawnMemoryBlocks(size_t n_blocks, size_t min_block_size, si
 
   std::vector<size_t> res;
 
-  // Generate 1/3 of blocks uniformly
+  // Generate 40% of blocks uniformly
   {
-    auto blocks = BlockSizeGenerator::Uniform(lo, hi, divisor, n_blocks / 3);
+    auto blocks = BlockSizeGenerator::Uniform(lo, hi, divisor, (n_blocks * 4) / 10);
     res.insert(res.end(), blocks.begin(), blocks.end());
   }
 
-  // Generate 1/3 of blocks exponentially
+  // Generate 40% of blocks exponentially
   {
-    size_t n = n_blocks / 3;
+    size_t n = (n_blocks * 4) / 10;
     auto blocks = BlockSizeGenerator::PowerOfTwo(lo, hi);
     while (blocks.size() > n) {
       auto drop = gen() % blocks.size();
@@ -70,89 +74,96 @@ void PopulateOverheads(Framework &framework) {
   std::function<double(double)> to_seconds_v1 = ToSeconds;
   std::function<double(double, size_t)> to_seconds_v2 = ToSeconds;
 
-  std::vector<size_t> single_blocks = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 1);
-  std::vector<size_t> double_blocks = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 2);
-  std::vector<size_t> block_sizes = { 1024 * 1024 };
+  size_t n_iter = DEFAULT_NUBER_OF_ITERATIONS;
+  size_t min_block = 1024;
+  std::vector<size_t> blocks_x1 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 1);
+  std::vector<size_t> blocks_x2 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 2);
+  std::vector<size_t> blocks_x4 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 4);
 
   // Events
   framework.AddBenchmark(std::move(overheads::cudaEventCreateTest()),
-                         100, 32, Unit::Seconds, to_seconds_v1);
+                         n_iter * 1000, 64, Unit::Seconds, to_seconds_v1);
   framework.AddBenchmark(std::move(overheads::cudaEventRecordTest()),
-                         100, 32, Unit::Seconds, to_seconds_v1);
+                         n_iter * 1000, 64, Unit::Seconds, to_seconds_v1);
   framework.AddBenchmark(std::move(overheads::cudaEventDestroyTest()),
-                         100, 32, Unit::Seconds, to_seconds_v1);
+                         n_iter * 1000, 64, Unit::Seconds, to_seconds_v1);
 
   // Memory allocation
-  framework.AddBenchmark(std::move(overheads::cudaMallocTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
-  framework.AddBenchmark(std::move(overheads::cudaMallocManagedTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
-  framework.AddBenchmark(std::move(overheads::cudaFreeTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
-  framework.AddBenchmark(std::move(overheads::cudaHostAllocTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
-  framework.AddBenchmark(std::move(overheads::cudaFreeHostTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaMallocTest()), blocks_x4,
+                         n_iter, 4, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaMallocManagedTest()), blocks_x4,
+                         n_iter, 4, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaFreeTest()), blocks_x4,
+                         n_iter, 4, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaHostAllocTest()), blocks_x4,
+                         n_iter, 4, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaFreeHostTest()), blocks_x4,
+                         n_iter, 4, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
 
   // Memory copy
-  framework.AddBenchmark(std::move(overheads::cudaMemsetTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaMemsetTest()), blocks_x1,
+                         n_iter, 50, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
 
-  framework.AddBenchmark(std::move(overheads::cudaMemcpyHostToDeviceTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
-  framework.AddBenchmark(std::move(overheads::cudaMemcpyDeviceToHostTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
-  framework.AddBenchmark(std::move(overheads::cudaMemcpyDeviceToDeviceTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaMemcpyHostToDeviceTest()), blocks_x2,
+                         n_iter, 5, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaMemcpyDeviceToHostTest()), blocks_x2,
+                         n_iter, 5, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaMemcpyDeviceToDeviceTest()), blocks_x2,
+                         n_iter, 5, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
 
-  framework.AddBenchmark(std::move(overheads::cudaMemcpyPinnedHostToDeviceTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
-  framework.AddBenchmark(std::move(overheads::cudaMemcpyPinnedDeviceToHostTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaMemcpyPinnedHostToDeviceTest()), blocks_x1,
+                         n_iter, 1, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaMemcpyPinnedDeviceToHostTest()), blocks_x1,
+                         n_iter, 1, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
 
-  framework.AddBenchmark(std::move(overheads::cudaMemcpyAsyncHostToDeviceTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
-  framework.AddBenchmark(std::move(overheads::cudaMemcpyAsyncDeviceToHostTest()), block_sizes,
-                         100, 100, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaMemcpyAsyncHostToDeviceTest()), blocks_x1,
+                         n_iter, 1, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
+  framework.AddBenchmark(std::move(overheads::cudaMemcpyAsyncDeviceToHostTest()), blocks_x1,
+                         n_iter, 1, Unit::Seconds, to_seconds_v2, WhoIsBetter::NeedMinMax);
 
   // Device
   framework.AddBenchmark(std::move(overheads::cudaDeviceSynchronizeTest()),
-                         100, 100, Unit::Seconds, to_seconds_v1);
+                         n_iter * 100, 10, Unit::Seconds, to_seconds_v1);
   framework.AddBenchmark(std::move(overheads::cudaDeviceResetTest()),
-                         100, 1, Unit::Seconds, to_seconds_v1);
-                         
+                         n_iter * 1000, 1, Unit::Seconds, to_seconds_v1);
+
 }
 
 void PopulateBandwidth(Framework &framework) {
   framework.SetTag("Bandwidth");
-  std::vector<size_t> block_sizes = { 1024 * 1024 };
+
+  size_t n_iter = DEFAULT_NUBER_OF_ITERATIONS;
+  size_t min_block = 256 * 1024 * 1024;
+  std::vector<size_t> blocks_x1 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 1);
+  std::vector<size_t> blocks_x2 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 2);
+  std::vector<size_t> blocks_x4 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 4);
 
   framework.AddBenchmark(std::move(bandwidth::cudaMemcpyHostToDeviceTest()),
-                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         blocks_x2, n_iter, 2, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 
   framework.AddBenchmark(std::move(bandwidth::cudaMemcpyDeviceToHostTest()),
-                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         blocks_x2, n_iter, 2, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 
   framework.AddBenchmark(std::move(bandwidth::cudaMemcpyDeviceToDeviceTest()),
-                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         blocks_x2, n_iter, 4, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 
   framework.AddBenchmark(std::move(bandwidth::cudaMemcpyPinnedHostToDeviceTest()),
-                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         blocks_x1, n_iter, 2, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 
   framework.AddBenchmark(std::move(bandwidth::cudaMemcpyPinnedDeviceToHostTest()),
-                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         blocks_x1, n_iter, 2, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 
   framework.AddBenchmark(std::move(bandwidth::cudaMemcpyManagedToDeviceTest()),
-                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         blocks_x1, n_iter, 2, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 
   framework.AddBenchmark(std::move(bandwidth::cudaMemcpyDeviceToManagedTest()),
-                         block_sizes, 100, 100, Unit::BytesPerSecond,
+                         blocks_x1, n_iter, 2, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 
 #if defined(API_CUDA)
