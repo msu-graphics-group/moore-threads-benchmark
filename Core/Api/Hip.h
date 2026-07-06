@@ -57,6 +57,10 @@ struct Hip {
     return ::hipGetDeviceCount(count);
   }
 
+  static cudaError_t cudaGetDevice(int *device) {
+    return ::hipGetDevice(device);
+  }
+
   static cudaError_t cudaSetDevice(int device) {
     return ::hipSetDevice(device);
   }

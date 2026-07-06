@@ -56,6 +56,10 @@ struct Musa {
     return ::musaGetDeviceCount(count);
   }
 
+  static cudaError_t cudaGetDevice(int *device) {
+    return ::musaGetDevice(device);
+  }
+
   static cudaError_t cudaSetDevice(int device) {
     return ::musaSetDevice(device);
   }

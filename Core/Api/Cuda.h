@@ -63,6 +63,10 @@ struct Cuda {
     return ::cudaGetDeviceCount(count);
   }
 
+  static cudaError_t cudaGetDevice(int *device) {
+    return ::cudaGetDevice(device);
+  }
+
   static cudaError_t cudaSetDevice(int device) {
     return ::cudaSetDevice(device);
   }
