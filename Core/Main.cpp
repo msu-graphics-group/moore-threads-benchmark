@@ -76,9 +76,9 @@ void PopulateOverheads(Framework &framework) {
 
   size_t n_iter = DEFAULT_NUBER_OF_ITERATIONS;
   size_t min_block = 1024;
-  std::vector<size_t> blocks_x1 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 1);
-  std::vector<size_t> blocks_x2 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 2);
-  std::vector<size_t> blocks_x4 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 4);
+  std::vector<size_t> blocks_x1 = SpawnMemoryBlocks(n_iter, min_block, 1);
+  std::vector<size_t> blocks_x2 = SpawnMemoryBlocks(n_iter, min_block, 2);
+  std::vector<size_t> blocks_x4 = SpawnMemoryBlocks(n_iter, min_block, 4);
 
   // Events
   framework.AddBenchmark(std::move(overheads::cudaEventCreateTest()),
@@ -133,10 +133,11 @@ void PopulateBandwidth(Framework &framework) {
   framework.SetTag("Bandwidth");
 
   size_t n_iter = DEFAULT_NUBER_OF_ITERATIONS;
-  size_t min_block = 256 * 1024 * 1024;
-  std::vector<size_t> blocks_x1 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 1);
-  std::vector<size_t> blocks_x2 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 2);
-  std::vector<size_t> blocks_x4 = SpawnMemoryBlocks(DEFAULT_NUMBER_OF_BLOCK_SIZES, 1024, 4);
+  //size_t min_block = 1024;
+  size_t min_block = 1024 * 1024;
+  std::vector<size_t> blocks_x1 = SpawnMemoryBlocks(n_iter, min_block, 1);
+  std::vector<size_t> blocks_x2 = SpawnMemoryBlocks(n_iter, min_block, 2);
+  std::vector<size_t> blocks_x4 = SpawnMemoryBlocks(n_iter, min_block, 4);
 
   framework.AddBenchmark(std::move(bandwidth::cudaMemcpyHostToDeviceTest()),
                          blocks_x2, n_iter, 2, Unit::BytesPerSecond,
@@ -167,8 +168,17 @@ void PopulateBandwidth(Framework &framework) {
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 
 #if defined(API_CUDA)
-  framework.AddBenchmark(std::move(bandwidth::cudaKernelTest()),
-                         100, 100, Unit::Seconds, ToSeconds);
+  framework.AddBenchmark(std::move(bandwidth::sharedMemoryReadTest()),
+                         blocks_x1, n_iter, 10, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::sharedMemoryWriteTest()),
+                         blocks_x1, n_iter, 10, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(bandwidth::constantMemoryReadTest()),
+                         blocks_x1, n_iter, 10, Unit::BytesPerSecond,
+                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 #endif
 }
 
