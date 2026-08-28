@@ -96,7 +96,7 @@ struct Musa {
 
   template<class T>
   static cudaError_t cudaHostAlloc(T **devPtr, size_t size, unsigned int flags) {
-    return ::musaHostAlloc(devPtr, size, unsigned int flags);
+    return ::musaHostAlloc(devPtr, size, flags);
   }
   
   template<class T>
@@ -106,7 +106,7 @@ struct Musa {
 
   template<class T>
   static cudaError_t cudaFreeHost(T *devptr) {
-    return ::musaFreeHost(devPtr);
+    return ::musaFreeHost(devptr);
   }
 
   template<class T>
@@ -122,7 +122,7 @@ struct Musa {
   template<class T>
   static cudaError_t cudaMemcpyAsync(T *dst, const T *src, size_t count,
                                      cudaMemcpyKind kind, cudaStream_t stream = 0) {
-    return ::musaMemcpyAsync(dst, src, kind, stream);
+    return ::musaMemcpyAsync(dst, src, count, kind, stream);
   }
 
   //--------------
