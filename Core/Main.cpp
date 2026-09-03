@@ -4,6 +4,7 @@
 #include "Framework/BlockSizeGenerator.h"
 #include "Tests/Overheads.h"
 #include "Tests/Bandwidth.h"
+#include "Tests/Compute.h"
 
 
 // Since we need reproducible results, we use the same seed for all random number generators
@@ -125,7 +126,7 @@ void PopulateOverheads(Framework &framework) {
   framework.AddBenchmark(std::move(overheads::cudaDeviceSynchronizeTest()),
                          n_iter * 100, 10, Unit::Seconds, to_seconds_v1);
   framework.AddBenchmark(std::move(overheads::cudaDeviceResetTest()),
-                         n_iter * 1000, 1, Unit::Seconds, to_seconds_v1);
+                         n_iter * 4, 1, Unit::Seconds, to_seconds_v1);
 
 }
 
@@ -182,6 +183,69 @@ void PopulateBandwidth(Framework &framework) {
 #endif
 }
 
+#if defined(API_CUDA)
+
+// Adds the whole family of tests for the given type
+// All the kernels are equally expensive to launch, so they share the same settings
+template <typename T>
+void AddComputeTests(Framework &framework, size_t n_iter, size_t n_sub_iter) {
+  // Packed types evaluate the function for several values per call
+  size_t lanes = std::is_same_v<T, compute::half2_t> ? 2 : 1;
+
+  // The number of iterations that keeps the kernels long enough to be measured precisely
+  // It is calibrated per type: fp64 is several times slower than fp32 on most of the GPUs
+  size_t iterations = compute::Calibrate<T>();
+
+  // The framework has no unit for 'function calls per second', so they are reported
+  // as Flops: one 'flop' here means one evaluation of the tested function
+  auto to_calls = compute::ToCallsPerSecond(compute::CALLS_PER_STEP * lanes, iterations);
+
+  // The arithmetic tests measure the operations themselves, so their 'flops' are real ones
+  auto to_flops    = compute::ToCallsPerSecond(1 * lanes, iterations);
+  auto to_flops_x2 = compute::ToCallsPerSecond(2 * lanes, iterations);
+
+  framework.AddBenchmark(std::move(compute::sinTest<T>(iterations)), compute::SupportedIlp(),
+                         n_iter, n_sub_iter, Unit::Flops, to_calls, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(compute::cosTest<T>(iterations)), compute::SupportedIlp(),
+                         n_iter, n_sub_iter, Unit::Flops, to_calls, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(compute::expTest<T>(iterations)), compute::SupportedIlp(),
+                         n_iter, n_sub_iter, Unit::Flops, to_calls, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(compute::logTest<T>(iterations)), compute::SupportedIlp(),
+                         n_iter, n_sub_iter, Unit::Flops, to_calls, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(compute::addTest<T>(iterations)), compute::SupportedIlp(),
+                         n_iter, n_sub_iter, Unit::Flops, to_flops, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(compute::mulTest<T>(iterations)), compute::SupportedIlp(),
+                         n_iter, n_sub_iter, Unit::Flops, to_flops, WhoIsBetter::HigherIsBetter);
+
+  framework.AddBenchmark(std::move(compute::maddTest<T>(iterations)), compute::SupportedIlp(),
+                         n_iter, n_sub_iter, Unit::Flops, to_flops_x2, WhoIsBetter::HigherIsBetter);
+}
+
+void PopulateCompute(Framework &framework) {
+  framework.SetTag("Compute");
+
+  size_t n_iter = DEFAULT_NUBER_OF_ITERATIONS;
+
+  // These kernels are long enough, so we do not need many subiterations to hide the overheads
+  size_t n_sub_iter = 3;
+
+  AddComputeTests<double>(framework, n_iter, n_sub_iter);
+  AddComputeTests<float>(framework, n_iter, n_sub_iter);
+
+  // Not every toolkit and not every GPU supports float16 math
+  if (compute::IsFp16Supported()) {
+    AddComputeTests<compute::half_t>(framework, n_iter, n_sub_iter);
+    AddComputeTests<compute::half2_t>(framework, n_iter, n_sub_iter);
+  }
+}
+
+#endif // API_CUDA
+
 int main() {
   try {
     Framework framework;
@@ -191,6 +255,9 @@ int main() {
 
     PopulateOverheads(framework);
     PopulateBandwidth(framework);
+#if defined(API_CUDA)
+    PopulateCompute(framework);
+#endif
     framework.Run();
     std::cout << std::endl;
 
