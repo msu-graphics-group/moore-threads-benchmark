@@ -11,18 +11,24 @@
 #if defined(API_MUSA)
   #if defined(__has_include) && __has_include(<musa_fp16.h>)
     #include <musa_fp16.h>
-    #define HAS_FP16 1
+    #define HAS_FP16
   #endif
 #elif defined(API_CUDA)
   #if defined(__has_include) && __has_include(<cuda_fp16.h>)
     #include <cuda_fp16.h>
-    #define HAS_FP16 1
+    #define HAS_FP16
   #endif
 #endif
 
-// Native float16 math requires compute capability 5.3 or higher
-#if !defined(__CUDA_ARCH__) || (__CUDA_ARCH__ >= 530)
-  #define NATIVE_FP16 1
+
+//------------------
+//--- Math setup ---
+//------------------
+
+// sin(), cos(), exp() and log() use the special function unit by default,
+// replace '1' with '0' to measure the library versions instead
+#if 1
+  #define SFU_MATH
 #endif
 
 
@@ -41,11 +47,13 @@ template <> struct DeviceType<compute::half2_t> { using Type = __half2; };
 #endif
 
 // Used to build the name of the benchmark, e.g. 'compute::sin<fp32>()'
-template <typename T> const char *TypeName();
-template <> const char *TypeName<double>()           { return "fp64";   }
-template <> const char *TypeName<float>()            { return "fp32";   }
-template <> const char *TypeName<compute::half_t>()  { return "fp16";   }
-template <> const char *TypeName<compute::half2_t>() { return "fp16x2"; }
+template <typename T> std::string_view TypeName();
+template <> std::string_view TypeName<double>()           { return "fp64";   }
+template <> std::string_view TypeName<float>()            { return "fp32";   }
+template <> std::string_view TypeName<compute::half_t>()  { return "fp16";   }
+template <> std::string_view TypeName<compute::half2_t>() { return "fp16x2"; }
+template <> std::string_view TypeName<int32_t>()          { return "int32";  }
+template <> std::string_view TypeName<uint32_t>()         { return "uint32"; }
 
 // The return type cannot be deduced from the argument, so this one stays a template
 template <typename T> __host__ __device__ T MakeValue(float value) {
@@ -59,6 +67,33 @@ __device__ double Add(double a, double b) { return a + b; }
 __device__ double Sub(double a, double b) { return a - b; }
 __device__ double Mul(double a, double b) { return a * b; }
 
+// Signed overflow is undefined, so int32 wraps through uint32 just like the hardware does
+__device__ uint32_t Add(uint32_t a, uint32_t b) { return a + b; }
+__device__ uint32_t Sub(uint32_t a, uint32_t b) { return a - b; }
+__device__ uint32_t Mul(uint32_t a, uint32_t b) { return a * b; }
+__device__ int32_t  Add(int32_t a, int32_t b)   { return (int32_t)Add((uint32_t)a, (uint32_t)b); }
+__device__ int32_t  Sub(int32_t a, int32_t b)   { return (int32_t)Sub((uint32_t)a, (uint32_t)b); }
+__device__ int32_t  Mul(int32_t a, int32_t b)   { return (int32_t)Mul((uint32_t)a, (uint32_t)b); }
+
+// The idea was proposed by Qwen 3.8: every integer step is XORed with 'v1', and this XOR is counted as
+// one more IntOp (see 'AddArithmeticTests()' in Main.cpp); the code below implements this idea
+// Integer arithmetic is exact, so 'v1 - (v1 - s)' is folded into 's' and the whole chain
+// disappears; a XOR with the runtime 'v1' has no such identity and keeps every step alive
+template <typename T> __device__ __forceinline__ T Mix(T value, T v1) {
+  if constexpr (std::is_integral_v<T>) {
+    return value ^ v1;
+  } else {
+    return value;
+  }
+}
+
+#if defined(SFU_MATH)
+// Only float32 has intrinsics for these functions, they compile directly into the special function unit
+__device__ float  Sin(float x)  { return __sinf(x); }
+__device__ float  Cos(float x)  { return __cosf(x); }
+__device__ float  Exp(float x)  { return __expf(x); }
+__device__ float  Log(float x)  { return __logf(x); }
+#else
 // 'sinf()' and 'sin()' are different functions, the second one would silently promote
 // a float argument to double and make the fp32 test several times slower
 __device__ float  Sin(float x)  { return sinf(x); }
@@ -66,10 +101,12 @@ __device__ float  Cos(float x)  { return cosf(x); }
 __device__ float  Exp(float x)  { return expf(x); }
 __device__ float  Log(float x)  { return logf(x); }
 
+// float64 has no intrinsics for these functions, so it is measured only with the library
 __device__ double Sin(double x) { return sin(x); }
 __device__ double Cos(double x) { return cos(x); }
 __device__ double Exp(double x) { return exp(x); }
 __device__ double Log(double x) { return log(x); }
+#endif
 
 #if defined(HAS_FP16)
 
@@ -81,8 +118,6 @@ template <> __host__ __device__ __half2 MakeValue<__half2>(float value) {
   return __float2half2_rn(value);
 }
 
-#if defined(NATIVE_FP16)
-// '__half' and '__half2' have no usable operators below compute capability 5.3
 __device__ __half  Add(__half a, __half b)   { return __hadd(a, b);  }
 __device__ __half  Sub(__half a, __half b)   { return __hsub(a, b);  }
 __device__ __half  Mul(__half a, __half b)   { return __hmul(a, b);  }
@@ -90,6 +125,8 @@ __device__ __half2 Add(__half2 a, __half2 b) { return __hadd2(a, b); }
 __device__ __half2 Sub(__half2 a, __half2 b) { return __hsub2(a, b); }
 __device__ __half2 Mul(__half2 a, __half2 b) { return __hmul2(a, b); }
 
+#if !defined(SFU_MATH)
+// float16 has no intrinsics for these functions either, 'hsin()' and others are the library versions
 __device__ __half  Sin(__half x)  { return hsin(x);  }
 __device__ __half  Cos(__half x)  { return hcos(x);  }
 __device__ __half  Exp(__half x)  { return hexp(x);  }
@@ -99,23 +136,6 @@ __device__ __half2 Sin(__half2 x) { return h2sin(x); }
 __device__ __half2 Cos(__half2 x) { return h2cos(x); }
 __device__ __half2 Exp(__half2 x) { return h2exp(x); }
 __device__ __half2 Log(__half2 x) { return h2log(x); }
-#else
-// Old devices have no native float16 math, so we emulate it via float
-__device__ __half Add(__half a, __half b) { return __float2half(__half2float(a) + __half2float(b)); }
-__device__ __half Sub(__half a, __half b) { return __float2half(__half2float(a) - __half2float(b)); }
-__device__ __half Mul(__half a, __half b) { return __float2half(__half2float(a) * __half2float(b)); }
-__device__ __half Sin(__half x) { return __float2half(sinf(__half2float(x))); }
-__device__ __half Cos(__half x) { return __float2half(cosf(__half2float(x))); }
-__device__ __half Exp(__half x) { return __float2half(expf(__half2float(x))); }
-__device__ __half Log(__half x) { return __float2half(logf(__half2float(x))); }
-
-__device__ __half2 Add(__half2 a, __half2 b) { return __halves2half2(Add(__low2half(a), __low2half(b)), Add(__high2half(a), __high2half(b))); }
-__device__ __half2 Sub(__half2 a, __half2 b) { return __halves2half2(Sub(__low2half(a), __low2half(b)), Sub(__high2half(a), __high2half(b))); }
-__device__ __half2 Mul(__half2 a, __half2 b) { return __halves2half2(Mul(__low2half(a), __low2half(b)), Mul(__high2half(a), __high2half(b))); }
-__device__ __half2 Sin(__half2 x) { return __halves2half2(Sin(__low2half(x)), Sin(__high2half(x))); }
-__device__ __half2 Cos(__half2 x) { return __halves2half2(Cos(__low2half(x)), Cos(__high2half(x))); }
-__device__ __half2 Exp(__half2 x) { return __halves2half2(Exp(__low2half(x)), Exp(__high2half(x))); }
-__device__ __half2 Log(__half2 x) { return __halves2half2(Log(__low2half(x)), Log(__high2half(x))); }
 #endif
 
 #endif // HAS_FP16
@@ -130,6 +150,7 @@ __device__ __half2 Log(__half2 x) { return __halves2half2(Log(__low2half(x)), Lo
 // SHOC keeps its chains bounded by a linear expression with a fixed point ('s = v1 - s * v2').
 // Ours are not linear, so the constants below were found with Qwen 3.8: each seed is the fixed
 // point of its own function. A chain that leaves it ends up in a NaN or in the denormals
+// Integer chains need no fixed point: they wrap around, and 'Mix()' keeps them from being folded
 namespace {
 
 // s = sin(s) + v1, the fixed point of 'sin(s) + 0.5'
@@ -174,42 +195,60 @@ struct LogOp {
   }
 };
 
-// The three tests below are the SHOC originals, where the expression is at the same time
+// The three tests below follow the SHOC arithmetic tests: for floats the expression is at the same time
 // the measured operation and the way to keep the chain bounded
 
-// s = v1 - s, stays at 'v1 / 2'
+// s = v1 - s, a float chain stays at 'v1 / 2'
 struct AddOp {
   static constexpr float kV1 = 1.0f, kInit = 0.5f;
+  static constexpr int   kIntV1 = 0x5bd1e995, kIntInit = 12345;
 
   template <typename T>
   static __device__ __forceinline__ T Apply(T s, T v1) {
-    return Sub(v1, s);
+    return Mix(Sub(v1, s), v1);
   }
 };
 
-// s = s * v1 with 'v1 = -1', so the value only changes its sign
+// s = s * v1, with 'v1 = -1' a float chain only changes its sign
 struct MulOp {
   static constexpr float kV1 = -1.0f, kInit = 1.0f;
+  static constexpr int   kIntV1 = 0x5bd1e995, kIntInit = 12345;
 
   template <typename T>
   static __device__ __forceinline__ T Apply(T s, T v1) {
-    return Mul(s, v1);
+    return Mix(Mul(s, v1), v1);
   }
 };
 
-// s = s * v1 + v1, the SHOC expression itself, converges to 'v1 / (1 - v1)'
+// s = s * v1 + v1, a float chain converges to 'v1 / (1 - v1)'
 struct MAddOp {
   static constexpr float kV1 = 0.5f, kInit = 1.0f;
+  static constexpr int   kIntV1 = 0x5bd1e995, kIntInit = 12345;
 
   template <typename T>
   static __device__ __forceinline__ T Apply(T s, T v1) {
-    return Add(Mul(s, v1), v1);
+    return Mix(Add(Mul(s, v1), v1), v1);
   }
 };
 
-template <typename T, typename OP> __host__ T V1() { return MakeValue<T>(OP::kV1); }
+// Integers need their own constants, the float ones would be truncated
+// 0x5bd1e995 is odd (a MurmurHash2 constant), so multiplying by it loses no bits, and the seed
+// is not 0, because 0 never leaves the integer add and madd chains
+template <typename T, typename OP> __host__ T V1() {
+  if constexpr (std::is_integral_v<T>) {
+    return static_cast<T>(OP::kIntV1);
+  } else {
+    return MakeValue<T>(OP::kV1);
+  }
+}
 
-template <typename T, typename OP> __host__ T InitialValue() { return MakeValue<T>(OP::kInit); }
+template <typename T, typename OP> __host__ T InitialValue() {
+  if constexpr (std::is_integral_v<T>) {
+    return static_cast<T>(OP::kIntInit);
+  } else {
+    return MakeValue<T>(OP::kInit);
+  }
+}
 
 } // unnamed namespace
 
@@ -224,33 +263,14 @@ namespace {
 constexpr size_t kBlockThreads = 256;
 
 // Steps performed by a thread per one iteration of the main loop, does not depend on ILP
-// SHOC unrolls 240 of them, but its step is one instruction and ours is a couple of dozens
+// SHOC unrolls 240 of them, we unroll fewer to keep the body short in the library build, where a sin()
+// step is much longer than in SHOC; 32 is also divisible by every supported level of ILP
 constexpr size_t kStepsPerIteration = 32;
-
-// 'Calibrate()' runs 'kProbeIterations' and scales the result to fit 'kTargetSeconds'
-constexpr size_t kProbeIterations = 32;
-constexpr double kTargetSeconds   = 0.02;
-constexpr size_t kMinIterations   = 16;
-constexpr size_t kMaxIterations   = 65536;
 
 constexpr size_t kMaxIlp = 8;
 
-const Api::cudaDeviceProp &Props() {
-  static Api::cudaDeviceProp props{};
-  static bool loaded = false;
-
-  if (!loaded) {
-    int device = 0;
-    HANDLE_ERROR(Api::cudaGetDevice(&device));
-    HANDLE_ERROR(Api::cudaGetDeviceProperties(&props, device));
-    loaded = true;
-  }
-  return props;
-}
-
-// The number of blocks required to fill all the multiprocessors of the GPU
-size_t Blocks() {
-  const auto &props = Props();
+// The number of blocks required to fill all the multiprocessors of the given device
+size_t Blocks(const Api::cudaDeviceProp &props) {
   size_t blocks_per_mp = std::max<size_t>(1, props.maxThreadsPerMultiProcessor / kBlockThreads);
   return std::max<size_t>(1, props.multiProcessorCount) * blocks_per_mp;
 }
@@ -314,7 +334,8 @@ __global__ void FillKernel(T *data, size_t size, T value) {
 //--- Validation ---
 //------------------
 
-// Our chains converge to a fixed point, so a diverged value means that the constants are wrong
+// The float chains stay bounded, so a diverged value means that the constants are wrong
+// Integer chains cannot diverge, for them the check always passes
 namespace {
 
 template <typename T> bool IsFinite(T value) {
@@ -347,18 +368,20 @@ bool IsFinite(__half2 value) {
 namespace {
 
 template <typename TAG, typename OP>
-class TranscendentalImpl : public CudaEventBenchmark<compute::Ilp> {
+class TranscendentalImpl : public CudaEventBenchmark<compute::Ilp, compute::Iterations> {
     using T = typename DeviceType<TAG>::Type;
 
   public:
-    TranscendentalImpl(std::string name, size_t iterations)
-      : name_(std::move(name)), iterations_(iterations) {}
+    explicit TranscendentalImpl(std::string name) : name_(std::move(name)) {}
 
     virtual std::string Name() const override { return name_; }
 
     virtual void Init() override {
+      // The device is asked before every run, 'SingleRun()' reuses the answer
+      blocks_ = Blocks(DeviceProperties());
+
       // The buffer is allocated for the maximal ILP, so all the configurations share its size
-      size_t elements = compute::TotalThreads() * kMaxIlp;
+      size_t elements = blocks_ * kBlockThreads * kMaxIlp;
       HANDLE_ERROR(Api::cudaMalloc(&data_, elements * sizeof(T)));
 
       size_t blocks = (elements + kBlockThreads - 1) / kBlockThreads;
@@ -390,9 +413,11 @@ class TranscendentalImpl : public CudaEventBenchmark<compute::Ilp> {
   private:
     template <int ILP>
     void Launch() {
+      // The second argument of the configuration, see 'compute::Iterations'
+      auto iterations = static_cast<uint32_t>(std::get<1>(Args()));
       for (size_t j = 0; j < SubIterations(); j++) {
-        TranscendentalKernel<T, ILP, OP><<<(unsigned)Blocks(), (unsigned)kBlockThreads>>>(
-          data_, (uint32_t)iterations_, V1<T, OP>());
+        TranscendentalKernel<T, ILP, OP><<<(unsigned)blocks_, (unsigned)kBlockThreads>>>(
+          data_, iterations, V1<T, OP>());
       }
     }
 
@@ -406,69 +431,20 @@ class TranscendentalImpl : public CudaEventBenchmark<compute::Ilp> {
     }
 
     std::string name_;
-    size_t iterations_{};
+    size_t blocks_{};
     T *data_{};
 };
 
 // Builds a test and gives it a name like 'compute::sin<fp32>()'
 template <typename TAG, typename OP>
-std::unique_ptr<IMicrobenchmark<compute::Ilp>> MakeTest(const char *op_name, size_t iterations) {
-  std::string name = std::string("compute::") + op_name + '<' + TypeName<TAG>() + ">()";
-  return std::make_unique<TranscendentalImpl<TAG, OP>>(std::move(name), iterations);
-}
-
-} // unnamed namespace
-
-
-//-------------------
-//--- Calibration ---
-//-------------------
-
-namespace {
-
-// Measures 'kProbeIterations' and scales them to fit 'kTargetSeconds'
-template <typename TAG>
-size_t CalibrateImpl() {
-  using T = typename DeviceType<TAG>::Type;
-  size_t elements = compute::TotalThreads() * kMaxIlp;
-
-  T *data{};
-  HANDLE_ERROR(Api::cudaMalloc(&data, elements * sizeof(T)));
-  size_t fill_blocks = (elements + kBlockThreads - 1) / kBlockThreads;
-  FillKernel<T><<<(unsigned)fill_blocks, (unsigned)kBlockThreads>>>(
-    data, elements, InitialValue<T, SinOp>());
-  HANDLE_ERROR(Api::cudaGetLastError());
-
-  Api::cudaEvent_t start, stop;
-  HANDLE_ERROR(Api::cudaEventCreate(&start));
-  HANDLE_ERROR(Api::cudaEventCreate(&stop));
-  HANDLE_ERROR(Api::cudaDeviceSynchronize());
-
-  // SHOC probes with 'MulMAdd2', the most expensive of its kernels, and we probe with sin()
-  // for the same reason: the remaining tests can only become shorter than the target time.
-  // The first launch is a warm-up, its time includes the lazy loading of the module
-  float ms{};
-  for (int attempt = 0; attempt < 2; attempt++) {
-    HANDLE_ERROR(Api::cudaEventRecord(start));
-    TranscendentalKernel<T, 2, SinOp><<<(unsigned)Blocks(), (unsigned)kBlockThreads>>>(
-      data, (uint32_t)kProbeIterations, V1<T, SinOp>());
-    HANDLE_ERROR(Api::cudaEventRecord(stop));
-    HANDLE_ERROR(Api::cudaEventSynchronize(stop));
-    HANDLE_ERROR(Api::cudaEventElapsedTime(&ms, start, stop));
-  }
-  HANDLE_ERROR(Api::cudaGetLastError());
-
-  HANDLE_ERROR(Api::cudaEventDestroy(stop));
-  HANDLE_ERROR(Api::cudaEventDestroy(start));
-  HANDLE_ERROR(Api::cudaFree(data));
-
-  double seconds = ms * 1e-3;
-  if (seconds < 1e-9) {
-    return kMaxIterations;
-  }
-
-  double scaled = kProbeIterations * kTargetSeconds / seconds;
-  return std::min(kMaxIterations, std::max(kMinIterations, (size_t)scaled));
+std::unique_ptr<IMicrobenchmark<compute::Ilp, compute::Iterations>> MakeTest(std::string_view op_name) {
+  // C++17 has no 'operator+' for 'std::string' and 'std::string_view', so the name is appended
+  std::string name{ "compute::" };
+  name += op_name;
+  name += '<';
+  name += TypeName<TAG>();
+  name += ">()";
+  return std::make_unique<TranscendentalImpl<TAG, OP>>(std::move(name));
 }
 
 } // unnamed namespace
@@ -485,127 +461,174 @@ const std::vector<Ilp> &SupportedIlp() {
   return ilp;
 }
 
+// Every supported GPU has native float16, so only the toolkit matters
 bool IsFp16Supported() {
 #if defined(HAS_FP16)
-  // MUSA and HiP report their own architecture versions, so we trust the toolkit
-  if (!IsCuda()) {
-    return true;
-  }
-  const auto &props = Props();
-  return props.major * 10 + props.minor >= 53;
+  return true;
 #else
   return false;
 #endif
 }
 
-size_t TotalThreads() {
-  return Blocks() * kBlockThreads;
+// With the special function unit only float32 is supported, it is the only type with intrinsics
+template <typename T> bool IsMathSupported() {
+#if defined(SFU_MATH)
+  return std::is_same_v<T, float>;
+#else
+  return true;
+#endif
 }
 
-std::function<double(double, Ilp)> ToCallsPerSecond(size_t calls_per_step, size_t iterations) {
+size_t TotalThreads() {
+  // The device is queried on every call, nothing is cached
+  int device = 0;
+  Api::cudaDeviceProp props{};
+  HANDLE_ERROR(Api::cudaGetDevice(&device));
+  HANDLE_ERROR(Api::cudaGetDeviceProperties(&props, device));
+  return Blocks(props) * kBlockThreads;
+}
+
+std::function<double(double, Ilp, Iterations)> ToCallsPerSecond(size_t calls_per_step) {
   // The number of steps does not depend on ILP: a thread always performs
   // 'kStepsPerIteration' of them, either as one long chain or as eight short ones
-  return [calls_per_step, iterations](double seconds, Ilp) -> double {
+  return [calls_per_step](double seconds, Ilp, Iterations iterations) -> double {
     double steps = (double)TotalThreads() * iterations * kStepsPerIteration;
     return seconds > 1e-9 ? steps * calls_per_step / seconds : 0.0;
   };
 }
 
-template <typename T> size_t Calibrate() {
-  return CalibrateImpl<T>();
+template <typename T> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest() {
+  return MakeTest<T, SinOp>("sin");
 }
 
-template <typename T> std::unique_ptr<IMicrobenchmark<Ilp>> sinTest(size_t iterations) {
-  return MakeTest<T, SinOp>("sin", iterations);
+template <typename T> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest() {
+  return MakeTest<T, CosOp>("cos");
 }
 
-template <typename T> std::unique_ptr<IMicrobenchmark<Ilp>> cosTest(size_t iterations) {
-  return MakeTest<T, CosOp>("cos", iterations);
+template <typename T> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest() {
+  return MakeTest<T, ExpOp>("exp");
 }
 
-template <typename T> std::unique_ptr<IMicrobenchmark<Ilp>> expTest(size_t iterations) {
-  return MakeTest<T, ExpOp>("exp", iterations);
+template <typename T> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest() {
+  return MakeTest<T, LogOp>("log");
 }
 
-template <typename T> std::unique_ptr<IMicrobenchmark<Ilp>> logTest(size_t iterations) {
-  return MakeTest<T, LogOp>("log", iterations);
+template <typename T> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest() {
+  return MakeTest<T, AddOp>("add");
 }
 
-template <typename T> std::unique_ptr<IMicrobenchmark<Ilp>> addTest(size_t iterations) {
-  return MakeTest<T, AddOp>("add", iterations);
+template <typename T> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest() {
+  return MakeTest<T, MulOp>("mul");
 }
 
-template <typename T> std::unique_ptr<IMicrobenchmark<Ilp>> mulTest(size_t iterations) {
-  return MakeTest<T, MulOp>("mul", iterations);
-}
-
-template <typename T> std::unique_ptr<IMicrobenchmark<Ilp>> maddTest(size_t iterations) {
-  return MakeTest<T, MAddOp>("madd", iterations);
+template <typename T> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest() {
+  return MakeTest<T, MAddOp>("madd");
 }
 
 // The host code knows nothing about '__half', so the tests are instantiated here
-template size_t Calibrate<double>();
-template std::unique_ptr<IMicrobenchmark<Ilp>> sinTest<double>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> cosTest<double>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> expTest<double>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> logTest<double>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> addTest<double>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> mulTest<double>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> maddTest<double>(size_t);
+template bool IsMathSupported<double>();
+template bool IsMathSupported<float>();
+template bool IsMathSupported<half_t>();
+template bool IsMathSupported<half2_t>();
 
-template size_t Calibrate<float>();
-template std::unique_ptr<IMicrobenchmark<Ilp>> sinTest<float>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> cosTest<float>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> expTest<float>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> logTest<float>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> addTest<float>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> mulTest<float>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> maddTest<float>(size_t);
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<float>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<float>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<float>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<float>();
+
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<double>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<double>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<double>();
+
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<float>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<float>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<float>();
+
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<int32_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<int32_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<int32_t>();
+
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<uint32_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<uint32_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<uint32_t>();
 
 #if defined(HAS_FP16)
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<half_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<half_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<half_t>();
 
-template size_t Calibrate<half_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp>> sinTest<half_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> cosTest<half_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> expTest<half_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> logTest<half_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> addTest<half_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> mulTest<half_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> maddTest<half_t>(size_t);
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<half2_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<half2_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<half2_t>();
+#endif
 
-template size_t Calibrate<half2_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp>> sinTest<half2_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> cosTest<half2_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> expTest<half2_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> logTest<half2_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> addTest<half2_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> mulTest<half2_t>(size_t);
-template std::unique_ptr<IMicrobenchmark<Ilp>> maddTest<half2_t>(size_t);
+#if defined(SFU_MATH)
+
+// Without the library math these symbols must still exist, 'IsMathSupported()' keeps them unused
+std::runtime_error NoIntrinsics() {
+  return std::runtime_error("only float32 has intrinsics for sin(), cos(), exp() and log()");
+}
+
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<double>() { throw NoIntrinsics(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<double>() { throw NoIntrinsics(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<double>() { throw NoIntrinsics(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<double>() { throw NoIntrinsics(); }
+
+#if defined(HAS_FP16)
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half_t>() { throw NoIntrinsics(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half_t>() { throw NoIntrinsics(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half_t>() { throw NoIntrinsics(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half_t>() { throw NoIntrinsics(); }
+
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half2_t>() { throw NoIntrinsics(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half2_t>() { throw NoIntrinsics(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half2_t>() { throw NoIntrinsics(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half2_t>() { throw NoIntrinsics(); }
+#endif
 
 #else
+
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<double>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<double>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<double>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<double>();
+
+#if defined(HAS_FP16)
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half_t>();
+
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half2_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half2_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half2_t>();
+template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half2_t>();
+#endif
+
+#endif
+
+#if !defined(HAS_FP16)
 
 // Without float16 these symbols must still exist, 'IsFp16Supported()' keeps them unused
 std::runtime_error NoFp16() {
   return std::runtime_error("float16 is not supported by this toolkit");
 }
 
-template <> size_t Calibrate<half_t>()                                    { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> sinTest<half_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> cosTest<half_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> expTest<half_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> logTest<half_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> addTest<half_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> mulTest<half_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> maddTest<half_t>(size_t) { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<half_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<half_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<half_t>() { throw NoFp16(); }
 
-template <> size_t Calibrate<half2_t>()                                    { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> sinTest<half2_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> cosTest<half2_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> expTest<half2_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> logTest<half2_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> addTest<half2_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> mulTest<half2_t>(size_t) { throw NoFp16(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp>> maddTest<half2_t>(size_t) { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half2_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half2_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half2_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half2_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<half2_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<half2_t>()  { throw NoFp16(); }
+template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<half2_t>() { throw NoFp16(); }
 
 #endif
 

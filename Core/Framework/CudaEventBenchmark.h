@@ -67,6 +67,16 @@ class CudaEventBenchmark : public IMicrobenchmark<ARGS...> {
     // Returns the value passed to 'Configure()'
     std::tuple<ARGS...> Args() const { return args_; }
 
+    // Returns the properties of the current device
+    // They are never cached, because the framework may switch between devices
+    Api::cudaDeviceProp DeviceProperties() const {
+      int device = 0;
+      Api::cudaDeviceProp props{};
+      HANDLE_ERROR(Api::cudaGetDevice(&device));
+      HANDLE_ERROR(Api::cudaGetDeviceProperties(&props, device));
+      return props;
+    }
+
   private:
     size_t iterations_{};
     size_t sub_iterations_{};
