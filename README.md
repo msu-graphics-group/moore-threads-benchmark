@@ -1,9 +1,15 @@
-`moore-threads-benchmark` is an unofficial collection of third-party performance tests ported to Moore Threads GPUs. The goal of this repository is to provide a realistic comparison of their performance with different GPU platforms, without applying MUSA-specific optimizations. This approach reflects a common developer scenario: running existing software rather than developing from scratch.
+`moore-threads-benchmark` is an unofficial collection of performance tests for Moore Threads GPUs.
 
-Currently, `moore-threads-benchmark` includes:
+### Key Features
+* Independent performance comparison of MTT GPUs against NVIDIA and AMD.
+* No MUSA-specific optimizations. The exact same code is used for MUSA, CUDA, and HIP (or Vulkan for all).
+* We adapt popular third-party tests rather than developing our own.
 
-[KernelSlicer](https://github.com/Ray-Tracing-Systems/kernel_slicer) (Vulkan, HiP, CUDA, MUSA)
-A source-to-source compiler for generating GPGPU code from annotated C++20 classes. It has a built-in benchmarking tools that helps us compare Moore Threads GPUs with various competing platforms from AMD, Intel and NVIDIA.
+### Included Benchmarks
+Currently, the repository contains the following test suites:
 
-[CUDAMicroBench](https://github.com/passlab/CUDAMicroBench) (CUDA, MUSA)
-A research project designed to test CUDA optimization techniques and evaluate peak performance on modern NVIDIA GPUs. In oppose to older benchmark suites ([SHOC](https://github.com/vetter/shoc), [Rodinia](https://github.com/yuhc/gpu-rodinia)), CUDAMicroBench is developed with awareness of relatively modern architectures such as NVIDIA Ampere.
+* **Core** *(MUSA, CUDA, HIP)*: A set of microbenchmarks inspired by [SHOC](https://github.com/vetter/shoc). It runs synthetic kernels to measure achievable peak `FLOPS` and bandwidth (`B/s`). Since the original [SHOC](https://github.com/vetter/shoc) project is obsolete, we have prepared a new framework for these tests.
+
+* **[KernelSlicer](https://github.com/Ray-Tracing-Systems/kernel_slicer)** *(Vulkan, HIP, CUDA, MUSA)*: A source-to-source compiler for generating GPGPU code from annotated C++20 classes. It features built-in benchmarking tools that we use to estimate performance across different computing patterns.
+
+* **[CUDAMicroBench](https://github.com/passlab/CUDAMicroBench)** *(CUDA, MUSA)*: A research project designed to test optimization techniques and evaluate peak performance on modern NVIDIA GPUs. Originally developed with newer architectures like NVIDIA Ampere in mind (unlike older suites such as [Rodinia](https://rodinia.cs.virginia.edu/)), it provides more relevant benchmarks for contemporary hardware.
