@@ -30,9 +30,6 @@ constexpr size_t CALLS_PER_STEP = 1;
 // The supported levels of instruction level parallelism, i.e. chains per thread
 const std::vector<Ilp> &SupportedIlp();
 
-// Only the toolkit decides, every supported GPU has native float16
-bool IsFp16Supported();
-
 // Whether sin(), cos(), exp() and log() can be measured for the given type
 // Only float32 has intrinsics for them, so with the special function unit the other types are skipped
 template <typename T> bool IsMathSupported();

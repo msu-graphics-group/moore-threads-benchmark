@@ -1,12 +1,6 @@
+.DS_Store
 .vscode
 .aider*
 Bin
-
-# Build directories
 build*/
-
-# Benchmark results
 result-*.txt
-
-# macOS
-.DS_Store

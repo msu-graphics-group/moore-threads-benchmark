@@ -3,13 +3,14 @@
 
 // Standardized units for microbenchmark results and device performance metrics
 enum class Unit {
-  Seconds,           // Time measurement in seconds
-  Flops,             // Floating point operations per second
-  IntOps,            // Integer operations per second
-  BytesPerSecond,    // Data transfer rate in bytes per second
-  Cycles,            // SM cycles measured by 'clock64()'
-  Hz,                // Frequency in hertz
-  Bytes              // Data size in bytes
+  Seconds,             // Time measurement in seconds
+  Flops,               // Floating point operations per second
+  IntOps,              // Integer operations per second
+  ActionsPerSecond,    // Any other operations/actions per second, e.g. sin()
+  BytesPerSecond,      // Data transfer rate in bytes per second
+  Cycles,              // SM cycles measured by 'clock64()'
+  Hz,                  // Frequency in hertz
+  Bytes                // Data size in bytes
 };
 
 // Converts a value to a user-friendly string format
@@ -18,4 +19,3 @@ std::string ToString(double value, Unit unit);
 
 // Version that takes a pair of {value, unit} 
 std::string ToString(const std::pair<double, Unit> &value);
-

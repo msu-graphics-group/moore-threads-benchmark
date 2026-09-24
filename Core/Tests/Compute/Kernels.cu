@@ -2,36 +2,6 @@
 
 #include "Framework/CudaEventBenchmark.h"
 
-//----------------------------
-//--- Half precision setup ---
-//----------------------------
-
-// Written with Qwen 3.8: SHOC has no float16 tests at all, so this part has no prototype
-// Neither CUDA nor MUSA guarantees that float16 arithmetic is available
-#if defined(API_MUSA)
-  #if defined(__has_include) && __has_include(<musa_fp16.h>)
-    #include <musa_fp16.h>
-    #define HAS_FP16
-  #endif
-#elif defined(API_CUDA)
-  #if defined(__has_include) && __has_include(<cuda_fp16.h>)
-    #include <cuda_fp16.h>
-    #define HAS_FP16
-  #endif
-#endif
-
-
-//------------------
-//--- Math setup ---
-//------------------
-
-// sin(), cos(), exp() and log() use the special function unit by default,
-// replace '1' with '0' to measure the library versions instead
-#if 1
-  #define SFU_MATH
-#endif
-
-
 //--------------------
 //--- Device types ---
 //--------------------
@@ -41,9 +11,9 @@ namespace {
 // Maps a public type tag onto the real type known by the device compiler
 template <typename T> struct DeviceType { using Type = T; };
 
-#if defined(HAS_FP16)
-template <> struct DeviceType<compute::half_t>  { using Type = __half;  };
-template <> struct DeviceType<compute::half2_t> { using Type = __half2; };
+#if defined(FP16_SUPPORT)
+  template <> struct DeviceType<compute::half_t>  { using Type = __half;  };
+  template <> struct DeviceType<compute::half2_t> { using Type = __half2; };
 #endif
 
 // Used to build the name of the benchmark, e.g. 'compute::sin<fp32>()'
@@ -87,58 +57,57 @@ template <typename T> __device__ __forceinline__ T Mix(T value, T v1) {
   }
 }
 
-#if defined(SFU_MATH)
-// Only float32 has intrinsics for these functions, they compile directly into the special function unit
-__device__ float  Sin(float x)  { return __sinf(x); }
-__device__ float  Cos(float x)  { return __cosf(x); }
-__device__ float  Exp(float x)  { return __expf(x); }
-__device__ float  Log(float x)  { return __logf(x); }
+#if defined(MATH_SFU)
+  // Only float32 has intrinsics for these functions, they compile directly into the special function unit
+  __device__ float  Sin(float x)  { return __sinf(x); }
+  __device__ float  Cos(float x)  { return __cosf(x); }
+  __device__ float  Exp(float x)  { return __expf(x); }
+  __device__ float  Log(float x)  { return __logf(x); }
 #else
-// 'sinf()' and 'sin()' are different functions, the second one would silently promote
-// a float argument to double and make the fp32 test several times slower
-__device__ float  Sin(float x)  { return sinf(x); }
-__device__ float  Cos(float x)  { return cosf(x); }
-__device__ float  Exp(float x)  { return expf(x); }
-__device__ float  Log(float x)  { return logf(x); }
+  // 'sinf()' and 'sin()' are different functions, the second one would silently promote
+  // a float argument to double and make the fp32 test several times slower
+  __device__ float  Sin(float x)  { return sinf(x); }
+  __device__ float  Cos(float x)  { return cosf(x); }
+  __device__ float  Exp(float x)  { return expf(x); }
+  __device__ float  Log(float x)  { return logf(x); }
 
-// float64 has no intrinsics for these functions, so it is measured only with the library
-__device__ double Sin(double x) { return sin(x); }
-__device__ double Cos(double x) { return cos(x); }
-__device__ double Exp(double x) { return exp(x); }
-__device__ double Log(double x) { return log(x); }
+  // float64 has no intrinsics for these functions, so it is measured only with the library
+  __device__ double Sin(double x) { return sin(x); }
+  __device__ double Cos(double x) { return cos(x); }
+  __device__ double Exp(double x) { return exp(x); }
+  __device__ double Log(double x) { return log(x); }
 #endif
 
-#if defined(HAS_FP16)
+#if defined(FP16_SUPPORT)
 
-template <> __host__ __device__ __half MakeValue<__half>(float value) {
-  return __float2half(value);
-}
+  template <> __host__ __device__ __half MakeValue<__half>(float value) {
+    return __float2half(value);
+  }
+  template <> __host__ __device__ __half2 MakeValue<__half2>(float value) {
+    return __float2half2_rn(value);
+  }
 
-template <> __host__ __device__ __half2 MakeValue<__half2>(float value) {
-  return __float2half2_rn(value);
-}
+  __device__ __half  Add(__half a, __half b)   { return __hadd(a, b);  }
+  __device__ __half  Sub(__half a, __half b)   { return __hsub(a, b);  }
+  __device__ __half  Mul(__half a, __half b)   { return __hmul(a, b);  }
+  __device__ __half2 Add(__half2 a, __half2 b) { return __hadd2(a, b); }
+  __device__ __half2 Sub(__half2 a, __half2 b) { return __hsub2(a, b); }
+  __device__ __half2 Mul(__half2 a, __half2 b) { return __hmul2(a, b); }
 
-__device__ __half  Add(__half a, __half b)   { return __hadd(a, b);  }
-__device__ __half  Sub(__half a, __half b)   { return __hsub(a, b);  }
-__device__ __half  Mul(__half a, __half b)   { return __hmul(a, b);  }
-__device__ __half2 Add(__half2 a, __half2 b) { return __hadd2(a, b); }
-__device__ __half2 Sub(__half2 a, __half2 b) { return __hsub2(a, b); }
-__device__ __half2 Mul(__half2 a, __half2 b) { return __hmul2(a, b); }
+  #if defined(MATH_LIBM)
+    // float16 has no intrinsics for these functions either, 'hsin()' and others are the library versions
+    __device__ __half  Sin(__half x)  { return hsin(x);  }
+    __device__ __half  Cos(__half x)  { return hcos(x);  }
+    __device__ __half  Exp(__half x)  { return hexp(x);  }
+    __device__ __half  Log(__half x)  { return hlog(x);  }
 
-#if !defined(SFU_MATH)
-// float16 has no intrinsics for these functions either, 'hsin()' and others are the library versions
-__device__ __half  Sin(__half x)  { return hsin(x);  }
-__device__ __half  Cos(__half x)  { return hcos(x);  }
-__device__ __half  Exp(__half x)  { return hexp(x);  }
-__device__ __half  Log(__half x)  { return hlog(x);  }
+    __device__ __half2 Sin(__half2 x) { return h2sin(x); }
+    __device__ __half2 Cos(__half2 x) { return h2cos(x); }
+    __device__ __half2 Exp(__half2 x) { return h2exp(x); }
+    __device__ __half2 Log(__half2 x) { return h2log(x); }
+  #endif
 
-__device__ __half2 Sin(__half2 x) { return h2sin(x); }
-__device__ __half2 Cos(__half2 x) { return h2cos(x); }
-__device__ __half2 Exp(__half2 x) { return h2exp(x); }
-__device__ __half2 Log(__half2 x) { return h2log(x); }
-#endif
-
-#endif // HAS_FP16
+#endif // FP16_SUPPORT
 
 } // unnamed namespace
 
@@ -342,7 +311,7 @@ template <typename T> bool IsFinite(T value) {
   return std::isfinite(static_cast<double>(value));
 }
 
-#if defined(HAS_FP16)
+#if defined(FP16_SUPPORT)
 
 bool IsFinite(__half value) {
   return std::isfinite(__half2float(value));
@@ -356,7 +325,7 @@ bool IsFinite(__half2 value) {
   return IsFinite(low);
 }
 
-#endif // HAS_FP16
+#endif // FP16_SUPPORT
 
 } // unnamed namespace
 
@@ -461,18 +430,9 @@ const std::vector<Ilp> &SupportedIlp() {
   return ilp;
 }
 
-// Every supported GPU has native float16, so only the toolkit matters
-bool IsFp16Supported() {
-#if defined(HAS_FP16)
-  return true;
-#else
-  return false;
-#endif
-}
-
 // With the special function unit only float32 is supported, it is the only type with intrinsics
 template <typename T> bool IsMathSupported() {
-#if defined(SFU_MATH)
+#if defined(MATH_SFU)
   return std::is_same_v<T, float>;
 #else
   return true;
@@ -552,62 +512,62 @@ template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<uint32_t>();
 template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<uint32_t>();
 template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<uint32_t>();
 
-#if defined(HAS_FP16)
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<half_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<half_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<half_t>();
+#if defined(FP16_SUPPORT)
+  template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<half_t>();
+  template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<half_t>();
+  template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<half_t>();
 
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<half2_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<half2_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<half2_t>();
+  template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> addTest<half2_t>();
+  template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> mulTest<half2_t>();
+  template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> maddTest<half2_t>();
 #endif
 
-#if defined(SFU_MATH)
+#if defined(MATH_SFU)
 
-// Without the library math these symbols must still exist, 'IsMathSupported()' keeps them unused
-std::runtime_error NoIntrinsics() {
-  return std::runtime_error("only float32 has intrinsics for sin(), cos(), exp() and log()");
-}
+  // Without the library math these symbols must still exist, 'IsMathSupported()' keeps them unused
+  std::runtime_error NoIntrinsics() {
+    return std::runtime_error("only float32 has intrinsics for sin(), cos(), exp() and log()");
+  }
 
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<double>() { throw NoIntrinsics(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<double>() { throw NoIntrinsics(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<double>() { throw NoIntrinsics(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<double>() { throw NoIntrinsics(); }
+  template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<double>() { throw NoIntrinsics(); }
+  template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<double>() { throw NoIntrinsics(); }
+  template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<double>() { throw NoIntrinsics(); }
+  template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<double>() { throw NoIntrinsics(); }
 
-#if defined(HAS_FP16)
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half_t>() { throw NoIntrinsics(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half_t>() { throw NoIntrinsics(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half_t>() { throw NoIntrinsics(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half_t>() { throw NoIntrinsics(); }
+  #if defined(FP16_SUPPORT)
+    template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half_t>() { throw NoIntrinsics(); }
+    template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half_t>() { throw NoIntrinsics(); }
+    template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half_t>() { throw NoIntrinsics(); }
+    template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half_t>() { throw NoIntrinsics(); }
 
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half2_t>() { throw NoIntrinsics(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half2_t>() { throw NoIntrinsics(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half2_t>() { throw NoIntrinsics(); }
-template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half2_t>() { throw NoIntrinsics(); }
-#endif
+    template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half2_t>() { throw NoIntrinsics(); }
+    template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half2_t>() { throw NoIntrinsics(); }
+    template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half2_t>() { throw NoIntrinsics(); }
+    template <> std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half2_t>() { throw NoIntrinsics(); }
+  #endif
 
 #else
 
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<double>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<double>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<double>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<double>();
+  template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<double>();
+  template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<double>();
+  template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<double>();
+  template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<double>();
 
-#if defined(HAS_FP16)
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half_t>();
+  #if defined(FP16_SUPPORT)
+    template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half_t>();
+    template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half_t>();
+    template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half_t>();
+    template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half_t>();
 
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half2_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half2_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half2_t>();
-template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half2_t>();
+    template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> sinTest<half2_t>();
+    template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> cosTest<half2_t>();
+    template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> expTest<half2_t>();
+    template std::unique_ptr<IMicrobenchmark<Ilp, Iterations>> logTest<half2_t>();
+  #endif
+
 #endif
 
-#endif
-
-#if !defined(HAS_FP16)
+#if !defined(FP16_SUPPORT)
 
 // Without float16 these symbols must still exist, 'IsFp16Supported()' keeps them unused
 std::runtime_error NoFp16() {

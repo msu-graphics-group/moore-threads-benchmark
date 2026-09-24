@@ -617,8 +617,8 @@ class cudaDeviceResetImpl : public IMicrobenchmark<> {
       std::vector<double> times;
       times.reserve(iterations_);
       for (size_t i = 0; i < iterations_; ++i) {
-        // REVIEW: nothing to destroy without a context
-        char *dummy = nullptr;
+        // Allocate any dummy data to initialize the context
+        void *dummy = nullptr;
         HANDLE_ERROR(Api::cudaMalloc(&dummy, 1));
         HANDLE_ERROR(Api::cudaFree(dummy));
 

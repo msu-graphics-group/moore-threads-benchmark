@@ -20,8 +20,11 @@ std::string ToString(const std::pair<double, Unit> &value) {
       break;
       
     case Unit::IntOps:
-      prefixes = { {1e12, "TIntOps"}, {1e9,  "GIntOps"}, {1e6,  "MIntOps"}, {1e3,  "KIntOps"}, {1.0,  "IntOps"}
-      };
+      prefixes = { {1e12, "TIntOps"}, {1e9,  "GIntOps"}, {1e6,  "MIntOps"}, {1e3,  "KIntOps"}, {1.0,  "IntOps"} };
+      break;
+
+    case Unit::ActionsPerSecond:
+      prefixes = { {1e12, "TAct/s"}, {1e9, "GAct/s"}, {1e6, "MAct/s"}, {1e3, "KAct/s"}, {1.0, "Act/s"} };
       break;
 
     case Unit::BytesPerSecond:

@@ -30,6 +30,12 @@ if(NOT "${API}" MATCHES "^(NONE|CUDA|HIP|MUSA|VULKAN)$")
   message(FATAL_ERROR "Unknown API '${API}'")
 endif()
 
+set(MATH "SFU" CACHE STRING "Math implementation for sin/cos/exp/log")
+set_property(CACHE MATH PROPERTY STRINGS "SFU" "LIBM")
+if(NOT "${MATH}" MATCHES "^(SFU|LIBM)$")
+  message(FATAL_ERROR "Unknown MATH '${MATH}'")
+endif()
+
 
 #####################
 ### Configuration ###
@@ -39,8 +45,14 @@ if(NOT EXISTS ${BIN_DIR})
   file(MAKE_DIRECTORY "${BIN_DIR}")
 endif()
 
+if("${MATH}" STREQUAL "SFU")
+  add_compile_definitions(MATH_SFU)
+elseif("${MATH}" STREQUAL "LIBM")
+  add_compile_definitions(MATH_LIBM)
+endif()
+
 if("${API}" STREQUAL "CUDA")
-  set(CMAKE_CUDA_ARCHITECTURES native)
+  set(CMAKE_CUDA_ARCHITECTURES native CACHE STRING "")
   enable_language(CUDA)
   find_package(CUDAToolkit REQUIRED)
   set(CMAKE_CUDA_STANDARD 17)

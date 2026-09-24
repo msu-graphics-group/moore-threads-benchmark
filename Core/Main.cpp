@@ -241,13 +241,11 @@ void AddMathTests(Framework &framework, size_t n_iter, size_t n_sub_iter) {
     return;
   }
 
-  // The framework has no unit for 'function calls per second', so they are reported
-  // as Flops: one 'flop' here means one evaluation of the tested function
   size_t calls = compute::CALLS_PER_STEP * Lanes<T>();
-  AddComputeTest(framework, compute::sinTest<T>, n_iter, n_sub_iter, Unit::Flops, calls);
-  AddComputeTest(framework, compute::cosTest<T>, n_iter, n_sub_iter, Unit::Flops, calls);
-  AddComputeTest(framework, compute::expTest<T>, n_iter, n_sub_iter, Unit::Flops, calls);
-  AddComputeTest(framework, compute::logTest<T>, n_iter, n_sub_iter, Unit::Flops, calls);
+  AddComputeTest(framework, compute::sinTest<T>, n_iter, n_sub_iter, Unit::ActionsPerSecond, calls);
+  AddComputeTest(framework, compute::cosTest<T>, n_iter, n_sub_iter, Unit::ActionsPerSecond, calls);
+  AddComputeTest(framework, compute::expTest<T>, n_iter, n_sub_iter, Unit::ActionsPerSecond, calls);
+  AddComputeTest(framework, compute::logTest<T>, n_iter, n_sub_iter, Unit::ActionsPerSecond, calls);
 }
 
 // Adds add, mul and madd for the given type
@@ -275,7 +273,7 @@ void PopulateCompute(Framework &framework) {
   AddArithmeticTests<float>(framework, n_iter, n_sub_iter, Unit::Flops);
 
   // Not every toolkit supports float16
-  if (compute::IsFp16Supported()) {
+  if (IsFp16Supported()) {
     AddMathTests<compute::half_t>(framework, n_iter, n_sub_iter);
     AddArithmeticTests<compute::half_t>(framework, n_iter, n_sub_iter, Unit::Flops);
     AddMathTests<compute::half2_t>(framework, n_iter, n_sub_iter);

@@ -30,12 +30,12 @@ std::optional<TheoreticalPerformance> EstimateCudaPerformance(const Api::cudaDev
     NvidiaArchitecture arch{ NvidiaArchitecture::Unknown };
     int simt_cores_per_sm{};
     int tensor_cores_per_sm{};
-    int fp32_per_simt_core{};
-    int fp16_per_simt_core{};
+    double fp32_per_simt_core{};
+    double fp16_per_simt_core{};
     double fp64_per_simt_core{};
-    int fp16_per_tensor_core{};
-    int fp32_per_tensor_core{};
-    int fp64_per_tensor_core{};
+    double fp16_per_tensor_core{};
+    double fp32_per_tensor_core{};
+    double fp64_per_tensor_core{};
     int data_rate_multiplier{2};
 
     if (props.major == 3) {
