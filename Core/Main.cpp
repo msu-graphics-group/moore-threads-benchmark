@@ -5,6 +5,7 @@
 #include "Tests/Overheads.h"
 #include "Tests/Bandwidth.h"
 #include "Tests/Compute.h"
+#include "Tests/Atomics.h"
 
 
 // Since we need reproducible results, we use the same seed for all random number generators
@@ -284,6 +285,33 @@ void PopulateCompute(Framework &framework) {
   AddArithmeticTests<uint32_t>(framework, n_iter, n_sub_iter, Unit::IntOps);
 }
 
+using AtomicTest = std::unique_ptr<IMicrobenchmark<atomics::Contention, atomics::Iterations>>;
+
+// Contended atomics are much slower, so every level of contention is calibrated on its own
+void AddAtomicTest(Framework &framework, AtomicTest (*make_test)(), size_t n_iter, size_t n_sub_iter) {
+  std::vector<std::tuple<atomics::Contention, atomics::Iterations>> configs;
+  for (atomics::Contention contention : atomics::SupportedContention()) {
+    configs.emplace_back(contention, CalibrateIterations(make_test(), contention));
+  }
+
+  framework.AddBenchmark(make_test(), configs, n_iter, n_sub_iter, Unit::ActionsPerSecond,
+                         atomics::ToCallsPerSecond(), WhoIsBetter::NeedMinMax);
+}
+
+void PopulateAtomics(Framework &framework) {
+  framework.SetTag("Atomics");
+
+  size_t n_iter = DEFAULT_NUBER_OF_ITERATIONS;
+  size_t n_sub_iter = 3;
+
+  AddAtomicTest(framework, atomics::globalAtomicAddTest,  n_iter, n_sub_iter);
+  AddAtomicTest(framework, atomics::sharedAtomicAddTest,  n_iter, n_sub_iter);
+  AddAtomicTest(framework, atomics::globalAtomicExchTest, n_iter, n_sub_iter);
+  AddAtomicTest(framework, atomics::sharedAtomicExchTest, n_iter, n_sub_iter);
+  AddAtomicTest(framework, atomics::globalAtomicCasTest,  n_iter, n_sub_iter);
+  AddAtomicTest(framework, atomics::sharedAtomicCasTest,  n_iter, n_sub_iter);
+}
+
 #endif // API_CUDA
 
 int main() {
@@ -297,6 +325,7 @@ int main() {
     PopulateBandwidth(framework);
 #if defined(API_CUDA)
     PopulateCompute(framework);
+    PopulateAtomics(framework);
 #endif
     framework.Run();
     std::cout << std::endl;
