@@ -169,7 +169,6 @@ void PopulateBandwidth(Framework &framework) {
                          blocks_x1, n_iter, 2, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 
-#if defined(API_CUDA)
   framework.AddBenchmark(std::move(bandwidth::sharedMemoryReadTest()),
                          blocks_x1, n_iter, 10, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
@@ -181,10 +180,8 @@ void PopulateBandwidth(Framework &framework) {
   framework.AddBenchmark(std::move(bandwidth::constantMemoryReadTest()),
                          blocks_x1, n_iter, 10, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
-#endif
 }
 
-#if defined(API_CUDA)
 
 // A draft of the calibration strategy, it lives outside the micro-tests
 
@@ -312,7 +309,6 @@ void PopulateAtomics(Framework &framework) {
   AddAtomicTest(framework, atomics::sharedAtomicCasTest,  n_iter, n_sub_iter);
 }
 
-#endif // API_CUDA
 
 int main() {
   try {
@@ -323,10 +319,8 @@ int main() {
 
     PopulateOverheads(framework);
     PopulateBandwidth(framework);
-#if defined(API_CUDA)
     PopulateCompute(framework);
     PopulateAtomics(framework);
-#endif
     framework.Run();
     std::cout << std::endl;
 

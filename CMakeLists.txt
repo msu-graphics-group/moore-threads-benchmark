@@ -62,8 +62,11 @@ if("${API}" STREQUAL "CUDA")
 
 elseif("${API}" STREQUAL "HIP")
   set(CMAKE_HIP_PLATFORM amd)
+  set(CMAKE_HIP_ARCHITECTURES native CACHE STRING "")
   enable_language(HIP)
   find_package(hip REQUIRED)
+  set(CMAKE_HIP_STANDARD 17)
+  set(CMAKE_HIP_STANDARD_REQUIRED ON)
   set(API_HIP ON)
   add_compile_definitions(API_HIP)
 
@@ -86,14 +89,10 @@ macro(discover_sources directory headers sources)
   file(GLOB_RECURSE new_sources ${directory}/*.cpp)
   list(APPEND ${sources} ${new_sources})
 
-  if(API_CUDA)
-    file(GLOB_RECURSE new_sources ${directory}/*.cu)
-    list(APPEND ${sources} ${new_sources})
-  endif()
-
-  if(API_MUSA)
-    file(GLOB_RECURSE new_sources ${directory}/*.mu)
-    list(APPEND ${sources} ${new_sources})
+  file(GLOB_RECURSE new_sources ${directory}/*.cu)
+  list(APPEND ${sources} ${new_sources})
+  if(API_HIP)
+    set_source_files_properties(${new_sources} PROPERTIES LANGUAGE HIP)
   endif()
 
   # Configure filters for VS project

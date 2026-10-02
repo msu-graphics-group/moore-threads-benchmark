@@ -132,6 +132,12 @@ struct Cuda {
     return ::cudaMemcpyAsync(dst, src, count, kind, stream);
   }
 
+  template<class T>
+  static cudaError_t cudaMemcpyToSymbol(const T &symbol, const void *src, size_t count,
+                                        size_t offset = 0, cudaMemcpyKind kind = cudaMemcpyHostToDevice) {
+    return ::cudaMemcpyToSymbol(symbol, src, count, offset, kind);
+  }
+
   //--------------
   //--- Events ---
   //--------------

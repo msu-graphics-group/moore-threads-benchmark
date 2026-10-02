@@ -182,8 +182,8 @@ class ConstantMemoryReadImpl : public KernelBandwidthImpl {
       for (int i = 0; i < kConstantFloats; i++) {
         host[i] = static_cast<float>(i);
       }
-      HANDLE_ERROR(::cudaMemcpyToSymbol(g_constantData, host.get(),
-                                        kConstantFloats * sizeof(float)));
+      HANDLE_ERROR(Api::cudaMemcpyToSymbol(g_constantData, host.get(),
+                                           kConstantFloats * sizeof(float)));
     }
 
     virtual void SingleRun() override {
