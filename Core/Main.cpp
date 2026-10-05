@@ -17,6 +17,9 @@ constexpr double MAX_MEMORY_USAGE = 0.2;
 // How much memory we can allocate in a test?
 constexpr size_t MAX_ALLOCATED_MEMORY = (size_t)1024 * 1024 * 1024;
 
+// How many times a bandwidth block must exceed L2, so the cache does not serve the next subiteration?
+constexpr size_t L2_CACHE_FACTOR = 2;
+
 // How many block sizes we want to generate per each test?
 // Some tests may increase or decrease this number
 constexpr size_t DEFAULT_NUMBER_OF_BLOCK_SIZES = 40;
@@ -136,10 +139,14 @@ void PopulateBandwidth(Framework &framework) {
 
   size_t n_iter = DEFAULT_NUBER_OF_ITERATIONS;
   //size_t min_block = 1024;
-  size_t min_block = 1024 * 1024;
+  size_t min_block = std::max<size_t>(1024 * 1024, L2_CACHE_FACTOR * BlockSizeGenerator::L2CacheSize());
+
+  // A huge L2 must still leave room for several block sizes
+  size_t max_block_x2 = BlockSizeGenerator::MaxBlockSize(2, MAX_MEMORY_USAGE, MAX_ALLOCATED_MEMORY);
+  min_block = std::min(min_block, max_block_x2 / 4);
+
   std::vector<size_t> blocks_x1 = SpawnMemoryBlocks(n_iter, min_block, 1);
   std::vector<size_t> blocks_x2 = SpawnMemoryBlocks(n_iter, min_block, 2);
-  std::vector<size_t> blocks_x4 = SpawnMemoryBlocks(n_iter, min_block, 4);
 
   framework.AddBenchmark(std::move(bandwidth::cudaMemcpyHostToDeviceTest()),
                          blocks_x2, n_iter, 2, Unit::BytesPerSecond,
