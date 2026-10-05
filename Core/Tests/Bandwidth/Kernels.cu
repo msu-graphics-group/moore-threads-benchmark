@@ -10,17 +10,22 @@
 namespace {
 
 constexpr int     kBlockThreads   = 256;
-constexpr int     kBlocks         = 64;
-constexpr size_t  kTotalThreads   = size_t(kBlocks) * kBlockThreads;
 constexpr int     kUnroll         = 16;
-constexpr size_t  kBytesPerRepeat = kTotalThreads * kUnroll * sizeof(float);
+
+// The number of blocks required to fill all the multiprocessors of the given device
+size_t Blocks(const Api::cudaDeviceProp &props) {
+  size_t blocks_per_mp = std::max<size_t>(1, props.maxThreadsPerMultiProcessor / kBlockThreads);
+  return std::max<size_t>(1, props.multiProcessorCount) * blocks_per_mp;
+}
 
 class KernelBandwidthImpl : public CudaEventBenchmark<size_t> {
   public:
     KernelBandwidthImpl() = default;
 
     virtual void Init() override {
-      HANDLE_ERROR(Api::cudaMalloc(&output_, kTotalThreads * sizeof(float)));
+      // The device is asked before every run, 'SingleRun()' reuses the answer
+      blocks_ = Blocks(DeviceProperties());
+      HANDLE_ERROR(Api::cudaMalloc(&output_, blocks_ * kBlockThreads * sizeof(float)));
     }
 
     virtual void CleanUp() override {
@@ -29,17 +34,13 @@ class KernelBandwidthImpl : public CudaEventBenchmark<size_t> {
     }
 
   protected:
+    // Rounded up, so a test never reports more bytes than its kernels have really read or written
     size_t Repeats() const {
       auto block_size = std::get<0>(Args());
-      auto repeats = block_size / kBytesPerRepeat;
-      if (repeats == 0) {
-        std::ostringstream oss;
-        oss << "Block size '" << block_size << "' is to small, at least "
-            << kBytesPerRepeat << " bytes are required";
-        throw std::runtime_error(oss.str());
-      }
-      return repeats;
+      size_t bytes_per_repeat = blocks_ * kBlockThreads * kUnroll * sizeof(float);
+      return (block_size + bytes_per_repeat - 1) / bytes_per_repeat;
     }
+    size_t blocks_ {};
     float *output_ {};
 };
 
@@ -82,7 +83,8 @@ __global__ void SharedMemoryWriteKernel(float *output, size_t repeats) {
 
   int index = threadIdx.x & (kSharedFloats - 1);
   for (size_t j = 0; j < repeats; j++) {
-    float value = static_cast<float>(j);
+    // A 32-bit conversion, the 64-bit one is slow on some GPUs and would limit the stores
+    float value = static_cast<float>(static_cast<unsigned>(j));
     #pragma unroll
     for (size_t k = 0; k < kUnroll; k++) {
       buffer[(index + k) & (kSharedFloats - 1)] = value;
@@ -105,7 +107,7 @@ class SharedMemoryReadImpl : public KernelBandwidthImpl {
     virtual void SingleRun() override {
       auto repeats = Repeats();
       for (size_t j = 0; j < SubIterations(); j++) {
-        SharedMemoryReadKernel<<<kBlocks, kBlockThreads>>>(output_, repeats);
+        SharedMemoryReadKernel<<<(unsigned)blocks_, kBlockThreads>>>(output_, repeats);
       }
       HANDLE_ERROR(Api::cudaGetLastError());
     }
@@ -121,7 +123,7 @@ class SharedMemoryWriteImpl : public KernelBandwidthImpl {
     virtual void SingleRun() override {
       auto repeats = Repeats();
       for (size_t j = 0; j < SubIterations(); j++) {
-        SharedMemoryWriteKernel<<<kBlocks, kBlockThreads>>>(output_, repeats);
+        SharedMemoryWriteKernel<<<(unsigned)blocks_, kBlockThreads>>>(output_, repeats);
       }
       HANDLE_ERROR(Api::cudaGetLastError());
     }
@@ -189,7 +191,7 @@ class ConstantMemoryReadImpl : public KernelBandwidthImpl {
     virtual void SingleRun() override {
       auto repeats = Repeats();
       for (size_t j = 0; j < SubIterations(); j++) {
-        ConstantMemoryReadKernel<<<kBlocks, kBlockThreads>>>(output_, repeats);
+        ConstantMemoryReadKernel<<<(unsigned)blocks_, kBlockThreads>>>(output_, repeats);
       }
       HANDLE_ERROR(Api::cudaGetLastError());
     }
