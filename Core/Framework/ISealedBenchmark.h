@@ -10,6 +10,10 @@ enum class WhoIsBetter {
   NeedMinMax      // Both min and max matter for comparison
 };
 
+enum class ResultOutput {
+  Summary,
+  AllAndBest
+};
 
 // Bundles 'IMicrobenchmark' with some test data,
 // so we can perform all tests without any knowledge of their nature
@@ -46,6 +50,8 @@ class ISealedBenchmark {
     // Defines the rule for determining 'better' performance
     // Lower values are better, higher values are better, or both min/max matter
     virtual WhoIsBetter Better() const = 0;
+
+    virtual ResultOutput Output() const = 0;
     
   protected:
     ISealedBenchmark() = default;

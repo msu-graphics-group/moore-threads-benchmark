@@ -33,11 +33,17 @@ class SealedBenchmark final : public ISealedBenchmark {
                     size_t sub_iterations,
                     Unit units,
                     const std::function<double(double, Args...)> &seconds_to_units,
-                    WhoIsBetter better)
+                    WhoIsBetter better,
+                    ResultOutput output = ResultOutput::Summary)
       : bench_(std::move(benchmark)), configs_(configs),
         iters_(iterations), sub_iters_(sub_iterations),
-        units_(units), seconds_to_units_(seconds_to_units), better_(better)
-    { assert(bench_ != nullptr); }
+        units_(units), seconds_to_units_(seconds_to_units), better_(better), output_(output)
+    {
+      assert(bench_ != nullptr);
+      if (output_ == ResultOutput::AllAndBest && better_ == WhoIsBetter::NeedMinMax) {
+        throw std::invalid_argument("A best result requires a higher- or lower-is-better metric");
+      }
+    }
 
     // The member of 'ISealedBenchmark'
     std::string Name() override { return bench_->Name(); }
@@ -83,6 +89,8 @@ class SealedBenchmark final : public ISealedBenchmark {
     // The member of 'ISealedBenchmark'
     WhoIsBetter Better() const override { return better_; }
 
+    ResultOutput Output() const override { return output_; }
+
   private:
     std::unique_ptr<IMicrobenchmark<Args...>> bench_;
     std::vector<std::tuple<Args...>> configs_;
@@ -92,4 +100,5 @@ class SealedBenchmark final : public ISealedBenchmark {
     Unit units_{ Unit::Seconds };
     std::function<double(double, Args...)> seconds_to_units_;
     WhoIsBetter better_{ WhoIsBetter::NeedMinMax };
+    ResultOutput output_{ ResultOutput::Summary };
 };

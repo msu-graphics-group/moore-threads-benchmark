@@ -48,12 +48,15 @@ class Framework {
                       const std::vector<std::tuple<Args...>> &configs,
                       size_t iterations, size_t sub_iterations,
                       Unit units, const std::function<double(double, Args...)> &seconds_to_units,
-                      WhoIsBetter better) {
+                      WhoIsBetter better, ResultOutput output = ResultOutput::Summary) {
       assert(iterations != 0);
       assert(sub_iterations != 0);
       auto sealed_benchmark = std::unique_ptr<ISealedBenchmark>(new SealedBenchmark<Args...>(
-        std::move(benchmark), configs, iterations, sub_iterations, units, seconds_to_units, better
+        std::move(benchmark), configs, iterations, sub_iterations, units, seconds_to_units, better, output
       ));
+      if (benchmarks_.find(current_tag_) == benchmarks_.end()) {
+        tag_order_.push_back(current_tag_);
+      }
       benchmarks_[current_tag_].emplace_back(std::move(sealed_benchmark));
     }
 
@@ -64,14 +67,14 @@ class Framework {
                       const std::vector<T> &configs,
                       size_t iterations, size_t sub_iterations,
                       Unit units, const std::function<double(double, T)> &seconds_to_units,
-                      WhoIsBetter better) {
+                      WhoIsBetter better, ResultOutput output = ResultOutput::Summary) {
       std::vector<std::tuple<T>> tuple_configs;
       tuple_configs.reserve(configs.size());
       for (const auto &val : configs) {
         tuple_configs.emplace_back(val);
       }
       AddBenchmark(std::move(benchmark), tuple_configs, iterations,
-                   sub_iterations, units, seconds_to_units, better);
+                   sub_iterations, units, seconds_to_units, better, output);
     }
 
     // Convenience overload for benchmarks that require ZERO arguments
@@ -85,17 +88,24 @@ class Framework {
       auto sealed_benchmark = std::unique_ptr<ISealedBenchmark>(
         new SealedBenchmark<>(std::move(benchmark), configs,
                               iterations, sub_iterations, units, seconds_to_units, WhoIsBetter::NeedMinMax));
+      if (benchmarks_.find(current_tag_) == benchmarks_.end()) {
+        tag_order_.push_back(current_tag_);
+      }
       benchmarks_[current_tag_].emplace_back(std::move(sealed_benchmark));
     }
 
     // Runs all benchmarks that were added, immediately prints the results to streams
     void Run();
 
+    bool HasFailures() const { return has_failures_; }
+
   private:
+    bool has_failures_{};
     double warm_up_fraction_{}, outlier_fraction_{};
     std::reference_wrapper<std::ostream> text_stream_;
     std::reference_wrapper<std::ostream> csv_stream_;
 
     std::string current_tag_;
+    std::vector<std::string> tag_order_;
     std::unordered_map<std::string, std::vector<std::unique_ptr<ISealedBenchmark>>> benchmarks_;
 };

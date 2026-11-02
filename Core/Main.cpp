@@ -6,6 +6,8 @@
 #include "Tests/Bandwidth.h"
 #include "Tests/Compute.h"
 #include "Tests/Atomics.h"
+#include "Tests/Tensor.h"
+#include "Tests/Tensor/Model.h"
 
 
 // Since we need reproducible results, we use the same seed for all random number generators
@@ -310,6 +312,27 @@ void PopulateAtomics(Framework &framework) {
 }
 
 
+// Each level of ILP is calibrated on its own, then all results and the best one are printed
+void PopulateTensor(Framework &framework) {
+  const auto reason = tensor::UnsupportedReason();
+  if (!reason.empty()) {
+    std::cout << "Tensor: skipped (" << reason << ")\n";
+    return;
+  }
+  framework.SetTag("Tensor");
+  std::vector<std::tuple<tensor::Ilp, tensor::Iterations>> configs;
+  for (size_t ilp : { 1, 2, 4, 8 }) {
+    auto probe = tensor::MakeTest();
+    // Two outer iterations, the first one is a warm-up
+    probe->Configure(2, 1, ilp, 32);
+    const size_t iterations = tensor::model::CalibrationIterations(probe->Run().back());
+    configs.emplace_back(ilp, iterations);
+  }
+  framework.AddBenchmark(tensor::MakeTest(tensor::OutputMode::Detailed), configs,
+                         DEFAULT_NUBER_OF_ITERATIONS, 3, Unit::Flops,
+                         tensor::ToFlops(), WhoIsBetter::HigherIsBetter, ResultOutput::AllAndBest);
+}
+
 int main() {
   try {
     Framework framework;
@@ -317,14 +340,15 @@ int main() {
                                 0.2); // 20% for outliers
     framework.SetTextStream(std::cout);
 
-    PopulateOverheads(framework);
-    PopulateBandwidth(framework);
     PopulateCompute(framework);
+    PopulateBandwidth(framework);
     PopulateAtomics(framework);
+    PopulateOverheads(framework);
+    PopulateTensor(framework);
     framework.Run();
     std::cout << std::endl;
 
-    return 0;
+    return framework.HasFailures() ? 1 : 0;
   }
   catch (std::exception &ex) {
     std::cerr << "Error: " << ex.what() << std::endl;
