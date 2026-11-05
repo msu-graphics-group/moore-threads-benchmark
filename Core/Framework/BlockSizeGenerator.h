@@ -17,6 +17,9 @@ class BlockSizeGenerator {
     // Use this as 'divisor' to utilize all threads in a warp
     static size_t WarpSize() { return Props().warpSize; }
 
+    // Blocks that fit into L2 are served from the cache when they are copied again
+    static size_t L2CacheSize() { return Props().l2CacheSize; }
+
     // Creates 'n_blocks' uniformly distributed block sizes within the range [lo, hi]
     // Each one is a multiple of 'divisor'
     // Example: <1, 6, 2, 3> -> { 2, 4, 6 }

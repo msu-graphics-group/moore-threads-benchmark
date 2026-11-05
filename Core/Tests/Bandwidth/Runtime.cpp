@@ -199,6 +199,9 @@ class cudaMemcpyManagedImpl : public CudaEventBenchmark<size_t> {
       auto block_size = std::get<0>(Args());
       HANDLE_ERROR(Api::cudaMallocManaged(&managed_, block_size));
       HANDLE_ERROR(Api::cudaMalloc(&device_, block_size));
+
+      // The pages are touched on the host, otherwise the driver may keep them on the device
+      std::memset(managed_, 0, block_size);
     }
 
     virtual void CleanUp() override {
