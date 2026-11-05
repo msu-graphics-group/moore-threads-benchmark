@@ -38,6 +38,7 @@
 
 #else
   #error API not specified, you should recompile benchmark with the option like '-DAPI=CUDA' or '-DAPI=MUSA'
+  constexpr inline std::string_view ApiName() { return "NONE"; }
 #endif
 
 

@@ -125,16 +125,18 @@ endmacro()
 ############
 
 discover_sources("${ROOT_DIR}/Core" CORE_HEADERS CORE_SOURCES)
-if(API_CUDA)
+if(NOT API_MUSA)
   add_executable(Core ${CORE_HEADERS} ${CORE_SOURCES})
-  target_link_libraries(Core PRIVATE CUDA::cudart)
-elseif(API_HIP)
-  add_executable(Core ${CORE_HEADERS} ${CORE_SOURCES})
-  target_link_libraries(Core PRIVATE hip::host)
-elseif(API_MUSA)
+else()
   musa_add_executable(Core ${CORE_HEADERS} ${CORE_SOURCES})
 endif()
+
 target_include_directories(Core PRIVATE "${ROOT_DIR}/Core")
+if(API_CUDA)
+  target_link_libraries(Core PRIVATE CUDA::cudart)
+elseif(API_HIP)
+  target_link_libraries(Core PRIVATE hip::host)
+endif()
 
 add_custom_command(TARGET Core POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:Core> "${BIN_DIR}")
