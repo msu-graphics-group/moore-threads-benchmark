@@ -8,17 +8,42 @@
 
 namespace {
 
-struct AddOp {
-  static __device__ __forceinline__ uint32_t Apply(uint32_t *word, uint32_t value, uint32_t) {
-    return atomicAdd(word, value);
-  }
-};
+#if 1
+  struct AddOp {
+    static __device__ __forceinline__ uint32_t Apply(uint32_t *word, uint32_t value, uint32_t) {
+      return atomicAdd(word, value);
+    }
+  };
 
-struct ExchOp {
-  static __device__ __forceinline__ uint32_t Apply(uint32_t *word, uint32_t value, uint32_t) {
-    return atomicExch(word, value);
-  }
-};
+  struct ExchOp {
+    static __device__ __forceinline__ uint32_t Apply(uint32_t *word, uint32_t value, uint32_t) {
+      return atomicExch(word, value);
+    }
+  };
+#else
+  // The same functions emulated with atomicCAS() as in the CUDA guide, a retry is not counted as a new call
+  struct AddOp {
+    static __device__ __forceinline__ uint32_t Apply(uint32_t *word, uint32_t value, uint32_t) {
+      uint32_t old = *word, assumed;
+      do {
+        assumed = old;
+        old = atomicCAS(word, assumed, assumed + value);
+      } while (old != assumed);
+      return old;
+    }
+  };
+
+  struct ExchOp {
+    static __device__ __forceinline__ uint32_t Apply(uint32_t *word, uint32_t value, uint32_t) {
+      uint32_t old = *word, assumed;
+      do {
+        assumed = old;
+        old = atomicCAS(word, assumed, value);
+      } while (old != assumed);
+      return old;
+    }
+  };
+#endif
 
 // Even steps swap 0 for the value, odd steps swap it back; failed calls under contention also count
 struct CasOp {
