@@ -154,14 +154,19 @@ void Framework::ExcludeIterations(double warm_up_fraction, double outlier_fracti
 }
 
 void Framework::Run() {
+  has_failures_ = false;
   PrintDeviceInfo(0, text_stream_, csv_stream_);
 
   auto &out = text_stream_.get();
-  for (auto &rec : benchmarks_) {
-    PrintBenchmarkSection(rec.first, text_stream_, csv_stream_);
+  for (const auto &tag : tag_order_) {
+    PrintBenchmarkSection(tag, text_stream_, csv_stream_);
 
-    for (auto &bench : rec.second) {
+    for (auto &bench : benchmarks_.at(tag)) {
       std::optional<Results> min, max;
+      std::string min_name;
+      std::string max_name;
+      const bool report_all = bench->Output() == ResultOutput::AllAndBest;
+      bool failed = false;
 
       bench->Reset();
       while (bench->MoveNext()) {
@@ -169,19 +174,41 @@ void Framework::Run() {
           auto results = Average(bench->Run(), warm_up_fraction_, outlier_fraction_);
           if (!min || results.mean < min->mean) {
             min = results;
+            min_name = bench->Name();
           }
           if (!max || results.mean > max->mean) {
             max = results;
+            max_name = bench->Name();
+          }
+          if (report_all) {
+            PrintBenchmarkResults(bench->Name(), FormatResults(*bench, results, results),
+                                  text_stream_, csv_stream_);
           }
         }
-        catch (std::exception &) {
+        catch (std::exception &ex) {
           // TODO: implement logging
+          has_failures_ = true;
+          failed = true;
+          out << "   " << bench->Name() << " [" << bench->Configuration()
+              << "]: error: " << ex.what() << std::endl;
           HANDLE_ERROR(Api::cudaDeviceReset());
         }
       }
 
-      std::string results = min && max ? FormatResults(*bench, *min, *max) : "error";
-      PrintBenchmarkResults(bench->Name(), results, text_stream_, csv_stream_);
+      if (report_all) {
+        std::string summary = "unavailable (no successful configurations)";
+        if (min && max) {
+          const auto &name = bench->Better() == WhoIsBetter::LowerIsBetter ? min_name : max_name;
+          summary = name + ": " + FormatResults(*bench, *min, *max);
+          if (failed) {
+            summary += " (successful configurations only)";
+          }
+        }
+        PrintBenchmarkResults("best", summary, text_stream_, csv_stream_);
+      } else {
+        std::string results = min && max ? FormatResults(*bench, *min, *max) : "error";
+        PrintBenchmarkResults(bench->Name(), results, text_stream_, csv_stream_);
+      }
     } // for benchmark
   } // for record
 }
