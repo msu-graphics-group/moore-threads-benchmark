@@ -138,7 +138,6 @@ void PopulateBandwidth(Framework &framework) {
   framework.SetTag("Bandwidth");
 
   size_t n_iter = DEFAULT_NUBER_OF_ITERATIONS;
-  //size_t min_block = 1024;
   size_t min_block = std::max<size_t>(1024 * 1024, L2_CACHE_FACTOR * BlockSizeGenerator::L2CacheSize());
 
   // A huge L2 must still leave room for several block sizes
@@ -168,13 +167,16 @@ void PopulateBandwidth(Framework &framework) {
                          blocks_x1, n_iter, 2, Unit::BytesPerSecond,
                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 
-  framework.AddBenchmark(std::move(bandwidth::cudaMemcpyManagedToDeviceTest()),
-                         blocks_x1, n_iter, 2, Unit::BytesPerSecond,
-                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+  // Works to slow on some systems, need to investigate the reason
+  if (!IsCuda()) {
+    framework.AddBenchmark(std::move(bandwidth::cudaMemcpyManagedToDeviceTest()),
+                          blocks_x1, n_iter, 2, Unit::BytesPerSecond,
+                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
 
-  framework.AddBenchmark(std::move(bandwidth::cudaMemcpyDeviceToManagedTest()),
-                         blocks_x1, n_iter, 2, Unit::BytesPerSecond,
-                         ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+    framework.AddBenchmark(std::move(bandwidth::cudaMemcpyDeviceToManagedTest()),
+                          blocks_x1, n_iter, 2, Unit::BytesPerSecond,
+                          ToBytesPerSecond, WhoIsBetter::HigherIsBetter);
+  }
 
   framework.AddBenchmark(std::move(bandwidth::sharedMemoryReadTest()),
                          blocks_x1, n_iter, 10, Unit::BytesPerSecond,

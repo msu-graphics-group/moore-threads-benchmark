@@ -34,6 +34,7 @@ struct Cuda {
   static constexpr cudaMemcpyKind cudaMemcpyHostToDevice                       = ::cudaMemcpyHostToDevice;
   static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost                       = ::cudaMemcpyDeviceToHost;
   static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice                     = ::cudaMemcpyDeviceToDevice;
+  static constexpr cudaMemcpyKind cudaMemcpyHostToHost                         = ::cudaMemcpyHostToHost;
   
   //--------------
   //--- Errors ---

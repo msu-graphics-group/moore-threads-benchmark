@@ -36,6 +36,12 @@ if(NOT "${MATH}" MATCHES "^(SFU|LIBM)$")
   message(FATAL_ERROR "Unknown MATH '${MATH}'")
 endif()
 
+set(ATOMICS "NATIVE" CACHE STRING "Atomic operations implementation")
+set_property(CACHE ATOMICS PROPERTY STRINGS "NATIVE" "EMU")
+if(NOT "${ATOMICS}" MATCHES "^(NATIVE|EMU)$")
+  message(FATAL_ERROR "Unknown ATOMICS '${ATOMICS}'")
+endif()
+
 
 #####################
 ### Configuration ###
@@ -49,6 +55,12 @@ if("${MATH}" STREQUAL "SFU")
   add_compile_definitions(MATH_SFU)
 elseif("${MATH}" STREQUAL "LIBM")
   add_compile_definitions(MATH_LIBM)
+endif()
+
+if("${ATOMICS}" STREQUAL "NATIVE")
+  add_compile_definitions(ATOMICS_NATIVE)
+elseif("${ATOMICS}" STREQUAL "EMU")
+  add_compile_definitions(ATOMICS_EMU)
 endif()
 
 if("${API}" STREQUAL "CUDA")

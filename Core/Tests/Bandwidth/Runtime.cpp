@@ -200,8 +200,28 @@ class cudaMemcpyManagedImpl : public CudaEventBenchmark<size_t> {
       HANDLE_ERROR(Api::cudaMallocManaged(&managed_, block_size));
       HANDLE_ERROR(Api::cudaMalloc(&device_, block_size));
 
-      // The pages are touched on the host, otherwise the driver may keep them on the device
-      std::memset(managed_, 0, block_size);
+      // All pages must be touched by the host (better in parallel)
+      // Otherwise, the driver may keep them on the device      
+      constexpr int64_t STRIDE = 4096;
+      auto touch = (volatile char*)managed_;
+      std::vector<std::thread> threads(std::max(1u, std::thread::hardware_concurrency()));
+      int64_t chunk_size = (block_size + threads.size() - 1) / threads.size();
+      
+      for (int i = 0; i < threads.size(); ++i) {
+        size_t start = i * chunk_size;
+        size_t end = std::min(block_size, start + chunk_size);
+        threads[i] = std::thread([touch, start, end, STRIDE]() {
+          for (int64_t offset = start; offset < end; offset += STRIDE) {
+            touch[offset] = 0;
+          }
+        });
+      }
+      for (auto &t : threads) {
+        t.join();
+      }
+      if (block_size > 0) {
+        touch[block_size - 1] = 0;
+      }
     }
 
     virtual void CleanUp() override {

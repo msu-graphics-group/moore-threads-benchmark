@@ -27,6 +27,7 @@ struct Hip {
   static constexpr cudaMemcpyKind cudaMemcpyHostToDevice                       = ::hipMemcpyHostToDevice;
   static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost                       = ::hipMemcpyDeviceToHost;
   static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice                     = ::hipMemcpyDeviceToDevice;
+  static constexpr cudaMemcpyKind cudaMemcpyHostToHost                         = ::hipMemcpyHostToHost;
 
 
   //--------------

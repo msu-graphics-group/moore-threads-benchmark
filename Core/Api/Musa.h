@@ -27,6 +27,7 @@ struct Musa {
   static constexpr cudaMemcpyKind cudaMemcpyHostToDevice                       = ::musaMemcpyHostToDevice;
   static constexpr cudaMemcpyKind cudaMemcpyDeviceToHost                       = ::musaMemcpyDeviceToHost;
   static constexpr cudaMemcpyKind cudaMemcpyDeviceToDevice                     = ::musaMemcpyDeviceToDevice;
+  static constexpr cudaMemcpyKind cudaMemcpyHostToHost                         = ::musaMemcpyHostToHost;
 
   //--------------
   //--- Errors ---

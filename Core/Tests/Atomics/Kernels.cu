@@ -8,7 +8,7 @@
 
 namespace {
 
-#if 1
+#if defined(ATOMICS_NATIVE)
   struct AddOp {
     static __device__ __forceinline__ uint32_t Apply(uint32_t *word, uint32_t value, uint32_t) {
       return atomicAdd(word, value);
@@ -20,7 +20,7 @@ namespace {
       return atomicExch(word, value);
     }
   };
-#else
+#elif defined(ATOMICS_EMU)
   // The same functions emulated with atomicCAS() as in the CUDA guide, a retry is not counted as a new call
   struct AddOp {
     static __device__ __forceinline__ uint32_t Apply(uint32_t *word, uint32_t value, uint32_t) {
@@ -43,6 +43,8 @@ namespace {
       return old;
     }
   };
+#else
+  #error Unknown implementation for atomics
 #endif
 
 // Even steps swap 0 for the value, odd steps swap it back; failed calls under contention also count
